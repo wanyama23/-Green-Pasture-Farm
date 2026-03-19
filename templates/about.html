@@ -1,0 +1,139 @@
+<!-- templates/about.html -->
+{% extends "layout.html" %}
+{% block content %}
+
+<!-- HERO (reuses same hero styles) -->
+<header class="hero-section" role="banner" aria-label="About Farmyard">
+  <div class="container hero-content text-white">
+    <div class="row align-items-stretch">
+      <div class="col-lg-6 d-flex align-items-center">
+        <div>
+          <h1 class="display-5 hero-title">Our Story</h1>
+          <p class="lead hero-sub">Rooted in Kisumu, growing for the future.</p>
+          <p class="hero-desc">
+            Farmyard began with a simple idea: combine traditional agricultural wisdom with modern,
+            sustainable practices to produce healthy poultry, premium pigs, and fresh eggs for our community.
+            We care for the land, the animals, and the people who depend on them.
+          </p>
+          <div class="mt-4">
+            <a href="{{ url_for('shop') }}" class="btn btn-primary btn-lg me-2">Explore Products</a>
+            <a href="{{ url_for('contact') }}" class="btn btn-outline-light btn-lg">Get in Touch</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6 d-none d-lg-block hero-side-col">
+        <img src="{{ url_for('static', filename='images/unsplash.jpg') }}"
+             alt="Farm scene" class="hero-side-image fade-mask">
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Roots in Kisumu -->
+<section class="py-5">
+  <div class="container">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-6">
+        <h2 class="h3 mb-3">Roots in Kisumu</h2>
+        <p class="text-muted">
+          Based in the vibrant region of Kisumu, Kenya, Farmyard bridges traditional farming knowledge
+          with modern, ethical practices. We nurture an ecosystem where animals and land thrive together,
+          producing food that is healthy, traceable, and responsibly raised.
+        </p>
+        <p class="text-muted">
+          Every egg collected and every piglet raised reflects our commitment to hygiene, animal welfare,
+          and high agricultural standards.
+        </p>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="ratio ratio-16x9 rounded overflow-hidden shadow-sm">
+          <img src="{{ url_for('static', filename='images/roots.jpg') }}" alt="Farm roots" class="w-100 h-100 object-fit-cover">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Our Values -->
+<section class="py-5 bg-white">
+  <div class="container">
+    <div class="text-center mb-4">
+      <h2 class="h3">Our Values</h2>
+      <p class="text-muted">The principles that guide our work every single day on the farm.</p>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
+                <!-- simple icon fallback -->
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l2.9 6.1L21 9.2l-5 3.9L17.8 21 12 17.8 6.2 21 7 13.1 2 9.2l6.1-1.1L12 2z" fill="#2b6b2b"/></svg>
+              </span>
+            </div>
+            <h5 class="card-title">Quality First</h5>
+            <p class="card-text text-muted">We never compromise. From feed selection to veterinary care, quality is embedded in every step.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C8 6 4 7 2 11c2 4 6 5 10 10s8-6 10-10c-2-4-6-5-10-9z" fill="#2b6b2b"/></svg>
+              </span>
+            </div>
+            <h5 class="card-title">Sustainability</h5>
+            <p class="card-text text-muted">Farming for the future: ethical practices that conserve resources and protect our environment.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <div class="mb-3">
+              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6-4.35-9-7.2C1.5 11.5 3 7 7 6c2.5-.6 5 1 5 1s2.5-1.6 5-1c4 .9 5.5 5.5 4 7.8C18 16.65 12 21 12 21z" fill="#2b6b2b"/></svg>
+              </span>
+            </div>
+            <h5 class="card-title">Community</h5>
+            <p class="card-text text-muted">Deeply rooted in Kisumu: we empower local farmers, create jobs, and support food security.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Call to action -->
+<section class="py-5">
+  <div class="container text-center">
+    <h3 class="mb-3">Become part of our story</h3>
+    <p class="text-muted mb-4">Support local agriculture and enjoy farm-fresh products delivered with care.</p>
+    <a href="{{ url_for('shop') }}" class="btn btn-primary btn-lg me-2">Explore Products</a>
+    <a href="{{ url_for('contact') }}" class="btn btn-outline-secondary btn-lg">Get in Touch</a>
+  </div>
+</section>
+
+<!-- Contact / Footer teaser -->
+<section class="py-4 bg-light">
+  <div class="container">
+    <div class="row g-3 align-items-center">
+      <div class="col-md-6">
+        <strong>Farmyard</strong>
+        <p class="mb-0 text-muted">Kisumu, Kenya — Dedicated to sustainable farming and quality produce.</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <a href="{{ url_for('contact') }}" class="btn btn-order btn-sm">Contact Us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

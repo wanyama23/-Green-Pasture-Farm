@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container py-5">
+  <h2>{{ action }} Product</h2>
+  <form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label class="form-label">Title</label>
+      <input name="title" class="form-control" value="{{ product['title'] if product else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Category</label>
+      <select name="category" class="form-select">
+        <option value="eggs" {% if product and product['category']=='eggs' %}selected{% endif %}>Eggs</option>
+        <option value="poultry" {% if product and product['category']=='poultry' %}selected{% endif %}>Poultry</option>
+        <option value="pigs" {% if product and product['category']=='pigs' %}selected{% endif %}>Pigs</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Price (KES)</label>
+      <input name="price" type="number" class="form-control" value="{{ product['price'] if product else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Unit</label>
+      <input name="unit" class="form-control" value="{{ product['unit'] if product else 'per item' }}">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Excerpt</label>
+      <input name="excerpt" class="form-control" value="{{ product['excerpt'] if product else '' }}">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Description</label>
+      <textarea name="description" class="form-control" rows="6">{{ product['description'] if product else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Image</label>
+      <input name="image" type="file" class="form-control">
+      {% if product and product['image'] %}
+        <small class="text-muted">Current: {{ product['image'] }}</small>
+      {% endif %}
+    </div>
+    <button class="btn btn-primary">{{ action }}</button>
+  </form>
+</div>
+{% endblock %}

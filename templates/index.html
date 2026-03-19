@@ -1,0 +1,398 @@
+<!-- templates/index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Farmyard — Kisumu's Premier Farm</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Minimal safety CSS (prevents overlays or duplicate html/body rules from blocking touchpad) -->
+  <style>
+    :root{
+      --brand-green: #2b6b2b;
+      --accent-orange: #ff7a2d;
+      --nav-height-desktop: 72px;
+      --nav-height-mobile: 64px;
+      --page-bg: #fbfbfb;
+    }
+
+    /* Reset + scrolling-safe base */
+    * { box-sizing: border-box; }
+    html, body {
+      height: auto;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      background: var(--page-bg);
+      color: #111827;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      padding-top: var(--nav-height-desktop);
+    }
+    @media (max-width: 991.98px) {
+      body { padding-top: var(--nav-height-mobile); }
+    }
+
+    /* Ensure decorative pseudo-elements do not intercept input */
+    .hero-section::before,
+    .hero-section::after,
+    .hero-full::before,
+    .hero-full::after,
+    body::after,
+    .fixed-overlay,
+    .visual-overlay {
+      pointer-events: none !important;
+    }
+
+    /* Hero should not hide page scroll */
+    .hero-section, .hero-full, .shop-hero {
+      overflow: visible !important;
+      min-height: calc(100vh - var(--nav-height-desktop));
+    }
+    @media (max-width: 991.98px) {
+      .hero-section, .hero-full, .shop-hero {
+        min-height: calc(100vh - var(--nav-height-mobile));
+      }
+    }
+
+    /* Small visual helpers */
+    .brand-title { font-family: "Playfair Display", serif; font-weight:700; color:var(--brand-green); }
+    .btn-order { background: var(--accent-orange); color: #fff; border: 0; font-weight:600; border-radius:.5rem; }
+    .btn-order:hover { background:#ff6a10; color:#fff; }
+
+    /* Card image fit */
+    .object-cover { object-fit: cover; object-position: center; }
+    .card-img-top { height: 220px; }
+    .hero-side-col img { height: 100%; width: 100%; object-fit: cover; display:block; }
+    /* Footer: warm green background */
+.site-footer {
+  background: linear-gradient(180deg, #1f5a2f 0%, #234f2b 50%, #173a20 100%);
+  color: #eef6ee;
+  padding: 48px 0;
+  font-size: .95rem;
+}
+.site-footer a { color: #eef6ee; }
+.site-footer a:hover { color: #ffb347; } /* amber accent on hover */
+
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top shadow-sm" style="height:var(--nav-height-desktop);">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="logo" class="rounded" style="width:44px;height:44px;object-fit:cover;">
+        <span class="brand-title">Farmyard</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-controls="navMain" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navMain">
+        <ul class="navbar-nav ms-auto align-items-center">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('shop') }}">Shop</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('projects') }}">Projects</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('contact') }}">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO (Bootstrap-friendly; gradient included in background-image so no pseudo overlays) -->
+  <header class="hero-section d-flex align-items-center" role="banner"
+    style="background-image:
+      linear-gradient(rgba(0,0,0,0.18), rgba(0,0,0,0.12)),
+      url('{{ url_for('static', filename='images/mng.jpg') }}');
+      background-size: cover;
+      background-position: center;
+      min-height: calc(100vh - 72px);">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-lg-6">
+          <div class="hero-content text-white">
+            <h1 class="display-5 fw-bold">Kisumu's Premier Farm</h1>
+            <p class="lead mb-2">Cultivating Quality, Nurturing Life.</p>
+            <p class="mb-3">We specialize in sustainable poultry rearing, premium pig farming, and farm-fresh eggs.</p>
+            <a href="{{ url_for('shop') }}" class="btn btn-primary btn-lg me-2">Shop Products</a>
+            <a href="{{ url_for('contact') }}" class="btn btn-outline-light btn-lg">Contact Farmer</a>
+          </div>
+        </div>
+
+        <div class="col-lg-6 d-none d-lg-flex justify-content-end">
+          <div class="hero-side-col" style="width:420px; border-radius:.5rem; overflow:hidden;">
+            <img src="{{ url_for('static', filename='images/hero-side.jpg') }}" alt="Farm scene" class="img-fluid">
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- QUICK CATEGORIES -->
+  <section class="py-4 bg-white">
+    <div class="container">
+      <div class="row g-3 text-center">
+        <div class="col-md-4">
+          <div class="p-4 rounded shadow-sm h-100">
+            <div class="mb-3">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c..." fill="#2b6b2b"/></svg>
+            </div>
+            <h5 class="mb-1">Poultry</h5>
+            <p class="text-muted small mb-2">Layers, broilers and breeding stock.</p>
+            <a href="{{ url_for('shop') }}?category=poultry" class="stretched-link text-decoration-none">Shop poultry →</a>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="p-4 rounded shadow-sm h-100">
+            <div class="mb-3">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M..." fill="#2b6b2b"/></svg>
+            </div>
+            <h5 class="mb-1">Piglets</h5>
+            <p class="text-muted small mb-2">Healthy weaned piglets for rearing.</p>
+            <a href="{{ url_for('shop') }}?category=pigs" class="stretched-link text-decoration-none">Shop piglets →</a>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="p-4 rounded shadow-sm h-100">
+            <div class="mb-3">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M..." fill="#2b6b2b"/></svg>
+            </div>
+            <h5 class="mb-1">Fresh Eggs</h5>
+            <p class="text-muted small mb-2">Daily-collected trays and premium dozens.</p>
+            <a href="{{ url_for('shop') }}?category=eggs" class="stretched-link text-decoration-none">Shop eggs →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED PRODUCTS -->
+  <section class="py-5 bg-light">
+    <div class="container">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="mb-0">Featured Products</h3>
+        <a href="{{ url_for('shop') }}" class="small text-muted">View all products →</a>
+      </div>
+
+      <div class="row g-3">
+        {% if products %}
+          {% for p in products[:4] %}
+          <div class="col-sm-6 col-md-3">
+            <div class="card h-100">
+              <img src="{{ url_for('static', filename='images/' ~ (p['image'] or 'placeholder.jpg')) }}" class="card-img-top object-cover" alt="{{ p['title'] }}">
+              <div class="card-body">
+                <h6 class="card-title mb-1">{{ p['title'] }}</h6>
+                <p class="text-muted small mb-2">{{ p['excerpt'] }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="text-success">KES {{ "{:,}".format(p['price']) }}</div>
+                  <a href="{{ url_for('product_detail', product_id=p['id']) }}" class="btn btn-sm btn-outline-secondary">Details</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="col-12">
+            <div class="alert alert-info mb-0">No featured products available.</div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- THREE PROMO CARDS -->
+  <section class="py-5">
+    <div class="container">
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm">
+            <img src="{{ url_for('static', filename='images/poultry.jpg') }}" class="card-img-top object-cover" alt="Poultry">
+            <div class="card-body">
+              <h5 class="card-title">Poultry Rearing</h5>
+              <p class="card-text">Healthy layers and broilers, breed-specific stock available.</p>
+              <a href="{{ url_for('shop') }}?category=poultry" class="stretched-link">Shop poultry</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm">
+            <img src="{{ url_for('static', filename='images/pigs.jpg') }}" class="card-img-top object-cover" alt="Pigs">
+            <div class="card-body">
+              <h5 class="card-title">Pig Farming</h5>
+              <p class="card-text">Breeding stock and piglets raised in clean, spacious pens.</p>
+              <a href="{{ url_for('shop') }}?category=pigs" class="stretched-link">Shop pigs</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm">
+            <img src="{{ url_for('static', filename='images/eggs.jpg') }}" class="card-img-top object-cover" alt="Eggs">
+            <div class="card-body">
+              <h5 class="card-title">Fresh Eggs</h5>
+              <p class="card-text">Collected daily and sold by tray or dozen — farm fresh.</p>
+              <a href="{{ url_for('shop') }}?category=eggs" class="stretched-link">Shop eggs</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALLERY -->
+  <section class="py-5">
+    <div class="container">
+      <h3 class="mb-3">From the Farm</h3>
+      <p class="text-muted small mb-4">Snapshots from the yard, our animals, and daily life on the farm.</p>
+      <div class="row g-2">
+        <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/gallery1.jpg') }}" class="w-100 rounded object-cover" style="height:160px;" alt=""></div>
+        <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/gallery2.jpg') }}" class="w-100 rounded object-cover" style="height:160px;" alt=""></div>
+        <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/gallery3.jpg') }}" class="w-100 rounded object-cover" style="height:160px;" alt=""></div>
+        <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/gallery4.jpg') }}" class="w-100 rounded object-cover" style="height:160px;" alt=""></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="py-5 bg-white">
+    <div class="container">
+      <h3 class="mb-4">What customers say</h3>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="p-4 border rounded h-100">
+            <p class="mb-2">"Fresh eggs every week — the yolks are rich and the hens are clearly well cared for."</p>
+            <div class="small text-muted">— A. Mwangi, Kisumu</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="p-4 border rounded h-100">
+            <p class="mb-2">"Ordered piglets and they arrived healthy and ready to settle in. Great support from the farmer."</p>
+            <div class="small text-muted">— J. Otieno, Homa Bay</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="p-4 border rounded h-100">
+            <p class="mb-2">"Reliable stock and honest advice — helped me choose the right breed for my small farm."</p>
+            <div class="small text-muted">— S. Njeri, Kisumu</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEWSLETTER CTA -->
+  <section class="py-5 bg-dark text-white">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h4 class="mb-1">Get farm updates and offers</h4>
+          <p class="mb-0 text-muted">Join our mailing list for seasonal offers, new stock alerts, and farm news.</p>
+        </div>
+        <div class="col-md-5">
+          <form class="d-flex" method="post" action="{{ url_for('contact') }}">
+            <input name="email" type="email" class="form-control me-2" placeholder="Your email" required>
+            <button class="btn btn-order" type="submit">Subscribe</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <!-- site footer -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="row gy-4">
+      <!-- Brand / About -->
+      <div class="col-md-4 footer-brand fade-up">
+        <a class="d-flex align-items-center mb-3" href="{{ url_for('index') }}">
+          <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Farmyard logo" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">
+          <div class="ms-3">
+            <div class="brand-title h5 mb-0">Farmyard</div>
+            <div class="small text-muted">Kisumu, Kenya</div>
+          </div>
+        </a>
+        <p class="text-muted small">Dedicated to sustainable farming practices and providing the highest quality poultry, pigs, and fresh eggs to the Kisumu community.</p>
+        <div class="social-icons mt-2">
+          <a href="#" aria-label="Facebook" class="social-link" title="Facebook">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12.07C22 6.48 17.52 2 11.93 2S2 6.48 2 12.07c0 4.99 3.66 9.13 8.44 9.93v-7.03H8.08v-2.9h2.36V9.41c0-2.33 1.39-3.62 3.52-3.62.  . ."/></svg>
+          </a>
+          <a href="#" aria-label="Instagram" class="social-link" title="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5z"/></svg>
+          </a>
+          <a href="#" aria-label="Twitter" class="social-link" title="Twitter">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 5.92c-.66.3-1.37.5-2.12.6a3.7 3.7 0 0 0 1.62-2.04 7.3 7.3 0 0 1-2.34.9 3.66 3.66 0 0 0-6.24 3.34A10.4 10.4 0 0 1 3.16 4.9a3.66 3.66 0 0 0 1.13 4.88c-.53 0-1.03-.16-1.47-.4v.04a3.66 3.66 0 0 0 2.94 3.59c-.28.08-.58.12-.88.12-.22 0-.44-.02-.65-.06a3.67 3.67 0 0 0 3.42 2.55A7.34 7.34 0 0 1 2 19.54 10.36 10.36 0 0 0 7.29 21c6.2 0 9.6-5.14 9.6-9.6v-.44A6.86 6.86 0 0 0 22 5.92z"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Links -->
+      <div class="col-md-4 footer-links fade-up">
+        <h5 class="mb-3">Quick Links</h5>
+        <ul class="list-unstyled">
+          <li><a href="{{ url_for('about') }}">About Us</a></li>
+          <li><a href="{{ url_for('projects') }}">Our Projects</a></li>
+          <li><a href="{{ url_for('shop') }}">Farm Shop</a></li>
+          <li><a href="{{ url_for('contact') }}">Contact</a></li>
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div class="col-md-4 fade-up">
+        <h5 class="mb-3">Contact Us</h5>
+        <div class="small text-muted">
+          <div class="mb-2"><strong>Location:</strong> Kisumu, Kenya • PO Box 12345</div>
+          <div class="mb-2"><strong>Phone:</strong> <a href="tel:+254700000000" class="link-light ms-2">+254 700 000 000</a></div>
+          <div class="mb-2"><strong>Email:</strong> <a href="mailto:farmer@farmyard.com" class="link-light ms-2">farmer@farmyard.com</a></div>
+        </div>
+        <div class="mt-3">
+          {% if endpoint_exists('privacy') %}
+            <a href="{{ url_for('privacy') }}" class="me-3">Privacy Policy</a>
+          {% endif %}
+          {% if endpoint_exists('terms') %}
+            <a href="{{ url_for('terms') }}">Terms of Service</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom d-flex flex-column flex-md-row justify-content-between align-items-center mt-4">
+      <div class="small">© {{ current_year }} Farmyard Kisumu. All rights reserved.</div>
+      <div class="small text-muted">Made with care • Sustainable farming</div>
+    </div>
+  </div>
+</footer>
+
+
+  <!-- Bootstrap JS bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Safety shim: prefer passive listeners for wheel/touch to avoid blocking scroll -->
+  <script>
+    (function(){
+      try {
+        const orig = EventTarget.prototype.addEventListener;
+        EventTarget.prototype.addEventListener = function(type, listener, options) {
+          if ((type === 'wheel' || type === 'touchstart' || type === 'touchmove') && (options === undefined || options === false)) {
+            orig.call(this, type, listener, { passive: true });
+          } else {
+            orig.call(this, type, listener, options);
+          }
+        };
+      } catch (e) {
+        console.warn('Passive listener shim not applied', e);
+      }
+    })();
+  </script>
+</body>
+</html>

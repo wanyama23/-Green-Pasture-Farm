@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="shop-hero py-5 text-white"
+         style="background-image: url('{{ url_for('static', filename='images/shop-hero.jpg') }}'); background-size:cover; background-position:center;">
+  <div class="container">
+    <h1 class="display-5">Farmyard Shop</h1>
+    <p class="lead">Fresh produce and premium livestock direct from our Kisumu farm.</p>
+  </div>
+</section>
+
+<section class="py-4">
+  <div class="container">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div class="btn-group" role="group">
+        {% for cat in categories %}
+          <a href="{{ url_for('shop') }}?category={{ cat }}" class="btn btn-sm {% if active_category==cat %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            {{ cat|title }}
+          </a>
+        {% endfor %}
+      </div>
+
+      <form method="get" action="{{ url_for('shop') }}" class="d-flex">
+        <input name="q" class="form-control form-control-sm me-2" placeholder="Search products" value="{{ request.args.get('q','') }}">
+        <button class="btn btn-sm btn-outline-secondary" type="submit">Search</button>
+      </form>
+    </div>
+
+    <div class="row g-4">
+      {% for p in products %}
+      <div class="col-sm-6 col-md-4">
+        <div class="card product-card h-100 shadow-sm">
+          <!-- ratio container ensures consistent aspect ratio -->
+          <div class="product-media ratio ratio-4x3">
+            <img
+              src="{{ url_for('static', filename='images/' ~ (p['image'] if p.get('image') else 'placeholder.jpg')) }}"
+              alt="{{ p['title'] }}"
+              class="card-img-top object-cover img-fix"
+              loading="lazy"
+              decoding="async"
+            >
+            <span class="product-label">{{ p['category']|upper }}</span>
+          </div>
+
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title mb-1">{{ p['title'] }}</h5>
+            <p class="text-muted small mb-2">{{ p.get('excerpt','') }}</p>
+
+            <div class="mt-auto d-flex align-items-center justify-content-between">
+              <div>
+                <strong class="text-success">KES {{ "{:,}".format(p['price']) }}</strong>
+                <div class="text-muted small">{{ p.get('unit','') }}</div>
+              </div>
+
+              <div>
+                <button class="btn btn-order btn-sm" onclick="openProductModal({{ p['id'] }})">View</button>
+                <a href="{{ url_for('product_detail', product_id=p['id']) }}" class="btn btn-outline-secondary btn-sm ms-1">Details</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="col-12">
+        <div class="alert alert-info mb-0">No products found.</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- Modal -->
+<div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body p-0">
+        <div class="row g-0">
+          <div class="col-md-6">
+            <img id="modal-image" src="{{ url_for('static', filename='images/placeholder.jpg') }}" alt="" class="w-100 h-100 object-cover">
+          </div>
+          <div class="col-md-6 p-4">
+            <h4 id="modal-title"></h4>
+            <p id="modal-excerpt" class="text-muted"></p>
+            <p id="modal-description"></p>
+            <div class="d-flex align-items-center justify-content-between mt-3">
+              <div>
+                <strong id="modal-price" class="text-success"></strong>
+                <div class="text-muted small" id="modal-unit"></div>
+              </div>
+              <div>
+                <a id="modal-details-link" href="#" class="btn btn-outline-secondary btn-sm me-2">Open Details</a>
+                <a id="modal-order" href="#" class="btn btn-order btn-sm">Order Now</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function openProductModal(id){
+  const apiBase = '{{ url_for("product_api", product_id=0) }}';
+  const detailBase = '{{ url_for("product_detail", product_id=0) }}';
+  const orderBase = '{{ url_for("order", product_id=0) }}';
+
+  const apiUrl = apiBase.replace('/0','/'+id);
+  try {
+    const res = await fetch(apiUrl);
+    if(!res.ok) throw new Error('API error');
+    const p = await res.json();
+
+    document.getElementById('modal-title').textContent = p.title || '';
+    document.getElementById('modal-excerpt').textContent = p.excerpt || '';
+    document.getElementById('modal-description').textContent = p.description || '';
+    document.getElementById('modal-price').textContent = p.price ? ('KES ' + Number(p.price).toLocaleString()) : '';
+    document.getElementById('modal-unit').textContent = p.unit || '';
+
+    const img = p.image ? ('{{ url_for("static", filename="images/") }}' + p.image) : '{{ url_for("static", filename="images/placeholder.jpg") }}';
+    const modalImg = document.getElementById('modal-image');
+    modalImg.src = img;
+    modalImg.classList.add('img-fix');
+
+    document.getElementById('modal-details-link').href = detailBase.replace('/0','/'+id);
+    document.getElementById('modal-order').href = orderBase.replace('/0','/'+id);
+
+    var modal = new bootstrap.Modal(document.getElementById('productModal'));
+    modal.show();
+  } catch (err) {
+    console.error(err);
+    alert('Could not load product details.');
+  }
+}
+</script>
+{% endblock %}

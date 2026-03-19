@@ -1,0 +1,230 @@
+{% extends "layout.html" %}
+{% block content %}
+<!-- Projects hero -->
+<header class="bg-light py-5">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-7">
+        <h1 class="display-5 fw-bold mb-2">Our Projects & Initiatives</h1>
+        <p class="lead text-muted mb-3">Practical farm projects that improve productivity, animal welfare, and community livelihoods.</p>
+        <p class="mb-3">From improved poultry housing to piglet breeding programs and egg distribution drives — see what we do, how we do it, and how you can join or buy into our initiatives.</p>
+        <a href="{{ url_for('contact') }}" class="btn btn-primary btn-lg me-2">Contact Farmer</a>
+        <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary btn-lg">Shop Products</a>
+      </div>
+
+      <div class="col-lg-5 d-none d-lg-block">
+        <div class="rounded overflow-hidden shadow-sm" style="height:320px;">
+          <img src="{{ url_for('static', filename='images/henpig.jpeg') }}" alt="Farm projects" class="w-100 h-100 object-cover">
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Category filters -->
+<section class="py-4">
+  <div class="container">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <strong class="me-2">Filter:</strong>
+      <button class="btn btn-sm btn-outline-secondary active" data-filter="all">All</button>
+      <button class="btn btn-sm btn-outline-secondary" data-filter="poultry">Poultry</button>
+      <button class="btn btn-sm btn-outline-secondary" data-filter="pigs">Pig Farming</button>
+      <button class="btn btn-sm btn-outline-secondary" data-filter="eggs">Egg Distribution</button>
+      <button class="btn btn-sm btn-outline-secondary" data-filter="community">Community</button>
+      <div class="ms-auto text-muted small">Showing <span id="project-count">0</span> projects</div>
+    </div>
+
+    <!-- Projects grid -->
+    <div class="row g-4" id="projects-grid">
+      <!-- Example project card (repeat or generate from server-side list) -->
+      <div class="col-sm-6 col-lg-4 project-item" data-category="poultry">
+        <div class="card h-100 shadow-sm">
+          <div class="ratio ratio-16x9">
+            <img src="{{ url_for('static', filename='images/poultry.jpg') }}" class="card-img-top object-cover" alt="Improved poultry house">
+          </div>
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title mb-0">Improved Poultry Housing</h5>
+              <span class="badge bg-success">Ongoing</span>
+            </div>
+            <p class="text-muted small mb-3">Upgraded coops with better ventilation and nesting boxes to increase egg yield and bird health.</p>
+            <div class="mt-auto d-flex justify-content-between align-items-center">
+              <div class="small text-muted">Started: Jan 2025</div>
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#projectModal" data-title="Improved Poultry Housing" data-img="{{ url_for('static', filename='images/poultry.jpg') }}" data-desc="We rebuilt the poultry houses with raised floors, improved drainage, and nesting boxes to reduce disease and increase egg production.">View</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-4 project-item" data-category="pigs">
+        <div class="card h-100 shadow-sm">
+          <div class="ratio ratio-16x9">
+            <img src="{{ url_for('static', filename='images/pigs.jpg') }}" class="card-img-top object-cover" alt="Piglet rearing program">
+          </div>
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title mb-0">Piglet Rearing Program</h5>
+              <span class="badge bg-info">Completed</span>
+            </div>
+            <p class="text-muted small mb-3">We raised healthy weaned piglets and trained smallholders on feeding and housing best practices.</p>
+            <div class="mt-auto d-flex justify-content-between align-items-center">
+              <div class="small text-muted">Completed: Aug 2024</div>
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#projectModal" data-title="Piglet Rearing Program" data-img="{{ url_for('static', filename='images/pigs.jpg') }}" data-desc="This program supplied 50 weaned piglets to local farmers and included hands-on training on biosecurity and feeding.">View</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-4 project-item" data-category="eggs">
+        <div class="card h-100 shadow-sm">
+          <div class="ratio ratio-16x9">
+            <img src="{{ url_for('static', filename='images/eggs.jpeg') }}" class="card-img-top object-cover" alt="Egg distribution drive">
+          </div>
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title mb-0">Egg Distribution Drive</h5>
+              <span class="badge bg-warning text-dark">Seasonal</span>
+            </div>
+            <p class="text-muted small mb-3">Weekly trays donated to local schools and markets to improve nutrition and create demand for farm eggs.</p>
+            <div class="mt-auto d-flex justify-content-between align-items-center">
+              <div class="small text-muted">Ongoing</div>
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#projectModal" data-title="Egg Distribution Drive" data-img="{{ url_for('static', filename='images/eggs.jpeg') }}" data-desc="We partner with local schools to supply nutritious eggs and teach simple recipes for school meals.">View</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add more project-item blocks or render them server-side -->
+    </div>
+  </div>
+</section>
+
+<!-- Project detail modal -->
+<div class="modal fade" id="projectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body p-0">
+        <div class="row g-0">
+          <div class="col-md-6">
+            <img id="modal-img" src="" alt="" class="w-100 h-100 object-cover">
+          </div>
+          <div class="col-md-6 p-4">
+            <h4 id="modal-title" class="mb-2"></h4>
+            <p id="modal-desc" class="text-muted small mb-3"></p>
+            <ul class="list-unstyled small text-muted mb-3">
+              <li><strong>Impact:</strong> Improved yields; better animal health</li>
+              <li><strong>Partners:</strong> Local farmers, community groups</li>
+              <li><strong>Contact:</strong> <a href="{{ url_for('contact') }}">Contact farmer</a></li>
+            </ul>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('contact') }}" class="btn btn-primary">Get involved</a>
+              <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<!-- CTA / Join the next project -->
+<section class="py-5 bg-primary text-white">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h3 class="mb-1">Join our next project</h3>
+        <p class="mb-0">We welcome volunteers, buyers, and partners. Sign up to receive updates about upcoming initiatives and stock availability.</p>
+      </div>
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a href="{{ url_for('contact') }}" class="btn btn-light btn-lg">Sign up / Contact</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Small gallery -->
+<section class="py-5">
+  <div class="container">
+    <h4 class="mb-3">Project snapshots</h4>
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/poultry1.jpeg') }}" class="w-100 rounded object-cover" style="height:140px;" alt=""></div>
+      <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/heneg.jpeg') }}" class="w-100 rounded object-cover" style="height:140px;" alt=""></div>
+      <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/pig1.jpeg') }}" class="w-100 rounded object-cover" style="height:140px;" alt=""></div>
+      <div class="col-6 col-md-3"><img src="{{ url_for('static', filename='images/poultry2.jpeg') }}" class="w-100 rounded object-cover" style="height:140px;" alt=""></div>
+    </div>
+  </div>
+</section>
+
+<!-- Testimonials -->
+<section class="py-5 bg-white">
+  <div class="container">
+    <h4 class="mb-3">What partners say</h4>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="p-4 border rounded h-100">
+          <p class="mb-2">"The training on piglet rearing changed how we manage our pens — healthier stock and better returns."</p>
+          <div class="small text-muted">— M. Ouma, Smallholder</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-4 border rounded h-100">
+          <p class="mb-2">"Egg distribution to schools has improved attendance and nutrition for many children."</p>
+          <div class="small text-muted">— S. Achieng, Community Coordinator</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="p-4 border rounded h-100">
+          <p class="mb-2">"Clear, honest communication and reliable stock — great partner to work with."</p>
+          <div class="small text-muted">— J. Kamau, Local Vendor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Small script: filter and modal population -->
+<script>
+  (function(){
+    // Filter buttons
+    const buttons = document.querySelectorAll('[data-filter]');
+    const items = document.querySelectorAll('.project-item');
+    const countEl = document.getElementById('project-count');
+
+    function updateCount() {
+      const visible = Array.from(items).filter(i => i.style.display !== 'none').length;
+      countEl.textContent = visible;
+    }
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', function(){
+        buttons.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        const filter = this.getAttribute('data-filter');
+        items.forEach(it => {
+          if (filter === 'all' || it.getAttribute('data-category') === filter) {
+            it.style.display = '';
+          } else {
+            it.style.display = 'none';
+          }
+        });
+        updateCount();
+      });
+    });
+
+    // Initialize count
+    updateCount();
+
+    // Modal population
+    const projectModal = document.getElementById('projectModal');
+    projectModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const title = btn.getAttribute('data-title');
+      const img = btn.getAttribute('data-img');
+      const desc = btn.getAttribute('data-desc');
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-img').src = img;
+      document.getElementById('modal-desc').textContent = desc;
+    });
+  })();
+</script>
+{% endblock %}
