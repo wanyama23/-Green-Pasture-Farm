@@ -29,10 +29,9 @@
       {% for p in products %}
       <div class="col-sm-6 col-md-4">
         <div class="card product-card h-100 shadow-sm">
-          <!-- ratio container ensures consistent aspect ratio -->
           <div class="product-media ratio ratio-4x3">
             <img
-              src="{{ url_for('static', filename='images/' ~ (p['image'] if p.get('image') else 'placeholder.jpg')) }}"
+              src="{{ url_for('static', filename=static_image_folder ~ '/' ~ (p['image'] if p.get('image') else 'placeholder.jpg')) }}"
               alt="{{ p['title'] }}"
               class="card-img-top object-cover img-fix"
               loading="lazy"
@@ -68,34 +67,73 @@
   </div>
 </section>
 
-<!-- Modal -->
+<!-- Order Modal -->
 <div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-body p-0">
-        <div class="row g-0">
-          <div class="col-md-6">
-            <img id="modal-image" src="{{ url_for('static', filename='images/placeholder.jpg') }}" alt="" class="w-100 h-100 object-cover">
-          </div>
-          <div class="col-md-6 p-4">
-            <h4 id="modal-title"></h4>
-            <p id="modal-excerpt" class="text-muted"></p>
-            <p id="modal-description"></p>
-            <div class="d-flex align-items-center justify-content-between mt-3">
-              <div>
-                <strong id="modal-price" class="text-success"></strong>
-                <div class="text-muted small" id="modal-unit"></div>
+      <form id="orderForm" class="needs-validation" novalidate>
+        <div class="modal-body p-0">
+          <div class="row g-0">
+            <div class="col-md-6">
+              <img id="modal-image" src="{{ url_for('static', filename=static_image_folder ~ '/placeholder.jpg') }}" alt="" class="w-100 h-100 object-cover">
+            </div>
+            <div class="col-md-6 p-4">
+              <h4 id="modal-title"></h4>
+              <p id="modal-excerpt" class="text-muted small"></p>
+
+              <input type="hidden" id="order-product-id" name="product_id">
+
+              <div class="mb-2">
+                <label class="form-label small">Your name</label>
+                <input id="buyer-name" name="buyer_name" class="form-control form-control-sm" required>
+                <div class="invalid-feedback">Please enter your name</div>
               </div>
-              <div>
-                <a id="modal-details-link" href="#" class="btn btn-outline-secondary btn-sm me-2">Open Details</a>
-                <a id="modal-order" href="#" class="btn btn-order btn-sm">Order Now</a>
+
+              <div class="mb-2">
+                <label class="form-label small">Phone</label>
+                <input id="buyer-phone" name="buyer_phone" class="form-control form-control-sm" required>
+                <div class="invalid-feedback">Please enter a phone number</div>
               </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Email</label>
+                <input id="buyer-email" name="buyer_email" type="email" class="form-control form-control-sm">
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Quantity</label>
+                <input id="buyer-quantity" name="quantity" type="number" min="1" value="1" class="form-control form-control-sm" required>
+                <div class="invalid-feedback">Enter a valid quantity</div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Delivery address</label>
+                <textarea id="buyer-address" name="address" class="form-control form-control-sm" rows="2"></textarea>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Notes</label>
+                <textarea id="buyer-notes" name="notes" class="form-control form-control-sm" rows="2"></textarea>
+              </div>
+
+              <div class="d-flex align-items-center justify-content-between mt-3">
+                <div>
+                  <strong id="modal-price" class="text-success"></strong>
+                  <div class="text-muted small" id="modal-unit"></div>
+                </div>
+
+                <div>
+                  <button type="submit" class="btn btn-order btn-sm">Place order</button>
+                  <button type="button" class="btn btn-sm btn-secondary ms-1" data-bs-dismiss="modal">Close</button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
-      </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+      </form>
+      <div class="modal-footer py-1">
+        <small class="text-muted ms-2">We will contact you to confirm the order.</small>
       </div>
     </div>
   </div>
@@ -106,9 +144,6 @@
 <script>
 async function openProductModal(id){
   const apiBase = '{{ url_for("product_api", product_id=0) }}';
-  const detailBase = '{{ url_for("product_detail", product_id=0) }}';
-  const orderBase = '{{ url_for("order", product_id=0) }}';
-
   const apiUrl = apiBase.replace('/0','/'+id);
   try {
     const res = await fetch(apiUrl);
@@ -117,17 +152,21 @@ async function openProductModal(id){
 
     document.getElementById('modal-title').textContent = p.title || '';
     document.getElementById('modal-excerpt').textContent = p.excerpt || '';
-    document.getElementById('modal-description').textContent = p.description || '';
     document.getElementById('modal-price').textContent = p.price ? ('KES ' + Number(p.price).toLocaleString()) : '';
     document.getElementById('modal-unit').textContent = p.unit || '';
+    document.getElementById('modal-image').src = p.image ? ('{{ url_for("static", filename="") }}' + '{{ static_image_folder }}/' + p.image : '{{ url_for("static", filename=static_image_folder ~ "/placeholder.jpg") }}';
+    document.getElementById('order-product-id').value = p.id;
 
-    const img = p.image ? ('{{ url_for("static", filename="images/") }}' + p.image) : '{{ url_for("static", filename="images/placeholder.jpg") }}';
-    const modalImg = document.getElementById('modal-image');
-    modalImg.src = img;
-    modalImg.classList.add('img-fix');
+    document.getElementById('orderForm').classList.remove('was-validated');
+    document.getElementById('orderForm').reset();
 
-    document.getElementById('modal-details-link').href = detailBase.replace('/0','/'+id);
-    document.getElementById('modal-order').href = orderBase.replace('/0','/'+id);
+    // prefill from localStorage if available
+    const savedName = localStorage.getItem('buyer_name');
+    if(savedName) document.getElementById('buyer-name').value = savedName;
+    const savedPhone = localStorage.getItem('buyer_phone');
+    if(savedPhone) document.getElementById('buyer-phone').value = savedPhone;
+    const savedEmail = localStorage.getItem('buyer_email');
+    if(savedEmail) document.getElementById('buyer-email').value = savedEmail;
 
     var modal = new bootstrap.Modal(document.getElementById('productModal'));
     modal.show();
@@ -136,5 +175,47 @@ async function openProductModal(id){
     alert('Could not load product details.');
   }
 }
+
+document.getElementById('orderForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const form = e.target;
+  if (!form.checkValidity()) {
+    form.classList.add('was-validated');
+    return;
+  }
+
+  const productId = document.getElementById('order-product-id').value;
+  const payload = {
+    buyer_name: document.getElementById('buyer-name').value.trim(),
+    buyer_phone: document.getElementById('buyer-phone').value.trim(),
+    buyer_email: document.getElementById('buyer-email').value.trim(),
+    quantity: Number(document.getElementById('buyer-quantity').value) || 1,
+    address: document.getElementById('buyer-address').value.trim(),
+    notes: document.getElementById('buyer-notes').value.trim()
+  };
+
+  try {
+    const orderUrl = '{{ url_for("order", product_id=0) }}'.replace('/0','/'+productId);
+    const res = await fetch(orderUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Order failed');
+
+    localStorage.setItem('buyer_name', payload.buyer_name);
+    localStorage.setItem('buyer_phone', payload.buyer_phone);
+    localStorage.setItem('buyer_email', payload.buyer_email);
+
+    alert('Order placed. Reference: ' + data.order_id);
+    var modalEl = document.getElementById('productModal');
+    var modal = bootstrap.Modal.getInstance(modalEl);
+    modal.hide();
+  } catch (err) {
+    console.error(err);
+    alert('Could not place order: ' + err.message);
+  }
+});
 </script>
 {% endblock %}
