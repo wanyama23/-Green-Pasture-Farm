@@ -1,36 +1,112 @@
-<!-- templates/about.html -->
 {% extends "layout.html" %}
 {% block content %}
 
-<!-- HERO (reuses same hero styles) -->
+<style>
+  :root{
+    --farm-green: #2b6b2b;
+    --accent-amber: #f6a623;
+    --soft-cream: #fffaf5;
+    --muted: #6b7280;
+    --card-shadow: 0 6px 18px rgba(43,107,43,0.08);
+  }
+
+  .hero-section{
+    background: linear-gradient(120deg, rgba(43,107,43,0.95) 0%, rgba(246,166,35,0.85) 60%);
+    color: #fff;
+    padding: 4.5rem 0;
+    border-bottom: 6px solid rgba(255,255,255,0.06);
+  }
+  .hero-title{ font-weight:700; font-size:2.6rem; letter-spacing: -0.02em; }
+  .hero-sub{ font-size:1.05rem; opacity:0.95; }
+  .hero-desc{ max-width:48rem; color: rgba(255,255,255,0.95); }
+
+  .hero-side-image{
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(15,23,42,0.25);
+    transform: translateY(0);
+    transition: transform .45s ease;
+  }
+  .hero-side-image:hover{ transform: translateY(-6px); }
+
+  body { background: var(--soft-cream); color: var(--text, #1f2937); }
+
+  .card.h-100{ border: none; border-radius: 12px; box-shadow: var(--card-shadow); }
+  .card .card-title{ color: var(--farm-green); font-weight:700; }
+  .card .card-text{ color: var(--muted); }
+
+  .badge-accent{
+    background: linear-gradient(90deg, rgba(246,166,35,1), rgba(255,200,80,1));
+    color: #1f1f1f;
+    font-weight:700;
+    padding: .45rem .7rem;
+    border-radius: 999px;
+    display:inline-block;
+    box-shadow: 0 6px 18px rgba(246,166,35,0.12);
+  }
+
+  .cta-primary{
+    background: linear-gradient(90deg,var(--farm-green), #1f6a2a);
+    border: none;
+    color: #fff;
+    padding: .85rem 1.25rem;
+    border-radius: 10px;
+    font-weight:700;
+    box-shadow: 0 10px 30px rgba(43,107,43,0.12);
+  }
+  .cta-outline{
+    border: 2px solid rgba(255,255,255,0.18);
+    color: #fff;
+    background: transparent;
+    padding: .7rem 1rem;
+    border-radius: 10px;
+    font-weight:600;
+  }
+
+  .values-icon{
+    width:56px;height:56px;border-radius:12px;background:linear-gradient(180deg,#fff,#fff);display:flex;align-items:center;justify-content:center;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+  }
+
+  .cta-row{ margin-top:1.25rem; }
+
+  .teaser-cta{ background: linear-gradient(90deg,#fff,#fff); border-radius:10px; padding:1rem; box-shadow: 0 8px 24px rgba(15,23,42,0.06); }
+
+  @media (max-width:991px){
+    .hero-title{ font-size:2rem; }
+    .hero-section{ padding:3rem 0; }
+  }
+</style>
+
 <header class="hero-section" role="banner" aria-label="About Farmyard">
-  <div class="container hero-content text-white">
-    <div class="row align-items-stretch">
-      <div class="col-lg-6 d-flex align-items-center">
-        <div>
-          <h1 class="display-5 hero-title">Our Story</h1>
-          <p class="lead hero-sub">Rooted in Kisumu, growing for the future.</p>
-          <p class="hero-desc">
-            Farmyard began with a simple idea: combine traditional agricultural wisdom with modern,
-            sustainable practices to produce healthy poultry, premium pigs, and fresh eggs for our community.
-            We care for the land, the animals, and the people who depend on them.
-          </p>
-          <div class="mt-4">
-            <a href="{{ url_for('shop') }}" class="btn btn-primary btn-lg me-2">Explore Products</a>
-            <a href="{{ url_for('contact') }}" class="btn btn-outline-light btn-lg">Get in Touch</a>
-          </div>
+  <div class="container hero-content">
+    <div class="row align-items-center">
+      <div class="col-lg-7">
+        <h1 class="display-5 hero-title">Our Story</h1>
+        <p class="lead hero-sub">Rooted in Kisumu, growing for the future</p>
+        <p class="hero-desc">
+          Farmyard began with a simple idea: combine traditional agricultural wisdom with modern,
+          sustainable practices to produce healthy poultry, premium pigs, and fresh eggs for our community.
+          We care for the land, the animals, and the people who depend on them.
+        </p>
+
+        <div class="d-flex gap-3 cta-row">
+          <a href="{{ url_for('shop') }}" class="cta-primary btn-lg">Explore Products</a>
+          <a href="{{ url_for('contact') }}" class="cta-outline btn-lg">Get in Touch</a>
+        </div>
+
+        <div class="mt-4 d-flex gap-3">
+          <span class="badge-accent">Local</span>
+          <span class="badge-accent">Sustainably Raised</span>
         </div>
       </div>
 
-      <div class="col-lg-6 d-none d-lg-block hero-side-col">
-        <img src="{{ url_for('static', filename='images/unsplash.jpg') }}"
-             alt="Farm scene" class="hero-side-image fade-mask">
+      <div class="col-lg-5 d-none d-lg-block text-end">
+        <img src="{{ url_for('static', filename='images/unsplash.jpg') }}" alt="Farm scene" class="hero-side-image w-100">
       </div>
     </div>
   </div>
 </header>
 
-<!-- Roots in Kisumu -->
 <section class="py-5">
   <div class="container">
     <div class="row align-items-center g-4">
@@ -45,6 +121,9 @@
           Every egg collected and every piglet raised reflects our commitment to hygiene, animal welfare,
           and high agricultural standards.
         </p>
+        <div class="mt-3">
+          <a class="btn btn-outline-success" href="{{ url_for('projects') }}">Learn about our projects</a>
+        </div>
       </div>
 
       <div class="col-lg-6">
@@ -56,54 +135,49 @@
   </div>
 </section>
 
-<!-- Our Values -->
-<section class="py-5 bg-white">
+<section class="py-5">
   <div class="container">
     <div class="text-center mb-4">
       <h2 class="h3">Our Values</h2>
-      <p class="text-muted">The principles that guide our work every single day on the farm.</p>
+      <p class="text-muted">The principles that guide our work every single day on the farm</p>
     </div>
 
     <div class="row g-4">
       <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <div class="card-body">
-            <div class="mb-3">
-              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
-                <!-- simple icon fallback -->
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l2.9 6.1L21 9.2l-5 3.9L17.8 21 12 17.8 6.2 21 7 13.1 2 9.2l6.1-1.1L12 2z" fill="#2b6b2b"/></svg>
-              </span>
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3 values-icon align-self-start">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l2.9 6.1L21 9.2l-5 3.9L17.8 21 12 17.8 6.2 21 7 13.1 2 9.2l6.1-1.1L12 2z" fill="var(--farm-green)"/></svg>
             </div>
             <h5 class="card-title">Quality First</h5>
-            <p class="card-text text-muted">We never compromise. From feed selection to veterinary care, quality is embedded in every step.</p>
+            <p class="card-text">We never compromise. From feed selection to veterinary care, quality is embedded in every step.</p>
+            <div class="mt-auto"><a href="{{ url_for('shop') }}" class="text-decoration-none" style="color:var(--farm-green);font-weight:700;">Shop quality products →</a></div>
           </div>
         </div>
       </div>
 
       <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <div class="card-body">
-            <div class="mb-3">
-              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C8 6 4 7 2 11c2 4 6 5 10 10s8-6 10-10c-2-4-6-5-10-9z" fill="#2b6b2b"/></svg>
-              </span>
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3 values-icon align-self-start">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C8 6 4 7 2 11c2 4 6 5 10 10s8-6 10-10c-2-4-6-5-10-9z" fill="var(--farm-green)"/></svg>
             </div>
             <h5 class="card-title">Sustainability</h5>
-            <p class="card-text text-muted">Farming for the future: ethical practices that conserve resources and protect our environment.</p>
+            <p class="card-text">Farming for the future: ethical practices that conserve resources and protect our environment.</p>
+            <div class="mt-auto"><a href="{{ url_for('projects') }}" class="text-decoration-none" style="color:var(--farm-green);font-weight:700;">See our sustainability work →</a></div>
           </div>
         </div>
       </div>
 
       <div class="col-md-4">
-        <div class="card h-100 shadow-sm">
-          <div class="card-body">
-            <div class="mb-3">
-              <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-light" style="width:48px;height:48px;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6-4.35-9-7.2C1.5 11.5 3 7 7 6c2.5-.6 5 1 5 1s2.5-1.6 5-1c4 .9 5.5 5.5 4 7.8C18 16.65 12 21 12 21z" fill="#2b6b2b"/></svg>
-              </span>
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3 values-icon align-self-start">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-6-4.35-9-7.2C1.5 11.5 3 7 7 6c2.5-.6 5 1 5 1s2.5-1.6 5-1c4 .9 5.5 5.5 4 7.8C18 16.65 12 21 12 21z" fill="var(--farm-green)"/></svg>
             </div>
             <h5 class="card-title">Community</h5>
-            <p class="card-text text-muted">Deeply rooted in Kisumu: we empower local farmers, create jobs, and support food security.</p>
+            <p class="card-text">Deeply rooted in Kisumu: we empower local farmers, create jobs, and support food security.</p>
+            <div class="mt-auto"><a href="{{ url_for('contact') }}" class="text-decoration-none" style="color:var(--farm-green);font-weight:700;">Work with us →</a></div>
           </div>
         </div>
       </div>
@@ -111,26 +185,28 @@
   </div>
 </section>
 
-<!-- Call to action -->
 <section class="py-5">
   <div class="container text-center">
-    <h3 class="mb-3">Become part of our story</h3>
-    <p class="text-muted mb-4">Support local agriculture and enjoy farm-fresh products delivered with care.</p>
-    <a href="{{ url_for('shop') }}" class="btn btn-primary btn-lg me-2">Explore Products</a>
-    <a href="{{ url_for('contact') }}" class="btn btn-outline-secondary btn-lg">Get in Touch</a>
+    <div class="teaser-cta d-inline-block">
+      <h3 class="mb-2">Become part of our story</h3>
+      <p class="text-muted mb-3">Support local agriculture and enjoy farm-fresh products delivered with care.</p>
+      <div class="d-flex justify-content-center gap-3">
+        <a href="{{ url_for('shop') }}" class="cta-primary">Explore Products</a>
+        <a href="{{ url_for('contact') }}" class="btn btn-outline-secondary">Get in Touch</a>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- Contact / Footer teaser -->
 <section class="py-4 bg-light">
   <div class="container">
     <div class="row g-3 align-items-center">
       <div class="col-md-6">
         <strong>Farmyard</strong>
-        <p class="mb-0 text-muted">Kisumu, Kenya — Dedicated to sustainable farming and quality produce.</p>
+        <p class="mb-0 text-muted">Kisumu, Kenya — Dedicated to sustainable farming and quality produce</p>
       </div>
       <div class="col-md-6 text-md-end">
-        <a href="{{ url_for('contact') }}" class="btn btn-order btn-sm">Contact Us</a>
+        <a href="{{ url_for('contact') }}" class="btn btn-order btn-sm" style="background:var(--farm-green);color:#fff;border-radius:8px;padding:.5rem .9rem;">Contact Us</a>
       </div>
     </div>
   </div>

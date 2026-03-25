@@ -235,6 +235,7 @@ body::after {
   filter: saturate(0.95) contrast(1.02) sepia(0.06) hue-rotate(-8deg);
 }
    
+.product-card:hover { transform: translateY(-8px); box-shadow: 0 22px 48px rgba(43,107,43,0.14); }
 
 /* .product-card { overflow: hidden; background: #fff; }
 .product-media { position: relative; height: 220px; overflow: hidden; background:#f3f4f6; }

@@ -2,12 +2,37 @@
 import os
 import logging
 import sqlite3
+import threading
+import smtplib
+from email.message import EmailMessage
+from email.utils import make_msgid
+from pathlib import Path
 from decimal import Decimal
 from flask import Flask, g, render_template, request, jsonify, abort, url_for, flash, redirect, current_app
 
 # --- Configuration via environment variables ---
 DB_NAME = os.getenv('DB_NAME', os.path.expanduser('~/farmyard.db'))
 STATIC_IMAGE_FOLDER = os.getenv('STATIC_IMAGE_FOLDER', 'images')
+
+# --- Notification configuration (via environment variables) ---
+SMTP_HOST = os.getenv('SMTP_HOST')  # e.g. smtp.gmail.com or localhost for debug server
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER = os.getenv('SMTP_USER')  # SMTP username (email)
+SMTP_PASS = os.getenv('SMTP_PASS')  # SMTP password or app password
+FROM_EMAIL = os.getenv('FROM_EMAIL', SMTP_USER)
+FARMER_EMAIL = os.getenv('FARMER_EMAIL')  # farmer's email address
+
+TWILIO_SID = os.getenv('TWILIO_ACCOUNT_SID')
+TWILIO_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+TWILIO_FROM = os.getenv('TWILIO_FROM_NUMBER')  # e.g. +1234567890 (Twilio number)
+FARMER_PHONE = os.getenv('FARMER_PHONE')  # farmer phone number in E.164 e.g. +2547xxxxxxx
+
+# Optional: Twilio for SMS
+try:
+    from twilio.rest import Client as TwilioClient
+    _TWILIO_AVAILABLE = True
+except Exception:
+    _TWILIO_AVAILABLE = False
 
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
@@ -33,7 +58,6 @@ def get_db():
     db_path = DB_NAME
     if not os.path.isabs(db_path):
         db_path = os.path.expanduser(db_path)
-    # ensure parent directory exists
     parent = os.path.dirname(db_path) or '.'
     os.makedirs(parent, exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -65,7 +89,6 @@ def rows_to_json_safe(rows):
 def ensure_tables():
     db = get_db()
     cur = db.cursor()
-    # products table: create only if missing (your DB already has it)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS products (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +101,6 @@ def ensure_tables():
           image TEXT
         );
     """)
-    # orders table required by the app
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orders (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,6 +116,150 @@ def ensure_tables():
     """)
     db.commit()
     cur.close()
+
+# --- Notifications (email with inline image + SMS) ---
+def send_email_with_image(to_address, subject, body_text, image_path=None, image_cid=None):
+    """Send plain-text + HTML email with optional inline image (image_path is filesystem path)."""
+    try:
+        if not SMTP_HOST:
+            logger.warning("SMTP_HOST not configured; skipping email to %s", to_address)
+            return False
+
+        msg = EmailMessage()
+        msg['From'] = FROM_EMAIL or 'no-reply@example.com'
+        msg['To'] = to_address
+        msg['Subject'] = subject
+
+        # If image provided, send a simple HTML body with inline image; otherwise plain text
+        if image_path and Path(image_path).is_file():
+            cid = image_cid or make_msgid(domain='farmyard.local')
+            html = f"""<html>
+                <body>
+                  <pre style="font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;">{body_text}</pre>
+                  <p><img src="cid:{cid[1:-1]}" alt="product image" style="max-width:320px; height:auto; border-radius:6px;"/></p>
+                </body>
+                </html>"""
+            msg.set_content(body_text)
+            msg.add_alternative(html, subtype='html')
+            with open(image_path, 'rb') as imgf:
+                img_data = imgf.read()
+            maintype, subtype = 'image', Path(image_path).suffix.lstrip('.').lower() or 'jpeg'
+            # attach related image to the HTML part
+            try:
+                msg.get_payload()[1].add_related(img_data, maintype=maintype, subtype=subtype, cid=cid)
+            except Exception:
+                # fallback: attach as normal attachment if related fails
+                msg.add_attachment(img_data, maintype=maintype, subtype=subtype, filename=os.path.basename(image_path))
+        else:
+            msg.set_content(body_text)
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+            smtp.ehlo()
+            if SMTP_PORT in (587, 25):
+                try:
+                    smtp.starttls()
+                    smtp.ehlo()
+                except Exception:
+                    pass
+            if SMTP_USER and SMTP_PASS:
+                smtp.login(SMTP_USER, SMTP_PASS)
+            smtp.send_message(msg)
+        logger.info("Email sent to %s", to_address)
+        return True
+    except Exception:
+        logger.exception("Failed to send email to %s", to_address)
+        return False
+
+def send_sms(to_number, message):
+    """Send SMS via Twilio if configured. Returns True on success."""
+    if not _TWILIO_AVAILABLE or not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_FROM:
+        logger.warning("Twilio not configured; skipping SMS to %s", to_number)
+        return False
+    try:
+        client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+        client.messages.create(body=message, from_=TWILIO_FROM, to=to_number)
+        logger.info("SMS sent to %s", to_number)
+        return True
+    except Exception:
+        logger.exception("Failed to send SMS to %s", to_number)
+        return False
+
+def notify_async(fn, *args, **kwargs):
+    """Run notification function in a daemon thread to avoid blocking requests."""
+    try:
+        t = threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
+        t.start()
+    except Exception:
+        logger.exception("Failed to start notification thread")
+
+def send_order_notifications(order_id, product, payload):
+    """
+    Compose and send notifications for a new order.
+    - order_id: int
+    - product: dict (id,title,unit,price,image,...)
+    - payload: dict (buyer_name,buyer_phone,buyer_email,quantity,address,notes)
+    """
+    farmer_subject = f"New order #{order_id} — {product.get('title')}"
+    farmer_body = (
+        f"New order received\n\n"
+        f"Order ID: {order_id}\n"
+        f"Product: {product.get('title')} (ID: {product.get('id')})\n"
+        f"Quantity: {payload.get('quantity')}\n"
+        f"Unit: {product.get('unit','')}\n\n"
+        f"Buyer name: {payload.get('buyer_name')}\n"
+        f"Buyer phone: {payload.get('buyer_phone')}\n"
+        f"Buyer email: {payload.get('buyer_email')}\n"
+        f"Delivery address: {payload.get('address')}\n"
+        f"Notes: {payload.get('notes')}\n\n"
+        f"Please contact the buyer to confirm and arrange delivery.\n"
+    )
+
+    buyer_subject = f"Order received — #{order_id}"
+    buyer_body = (
+        f"Thank you {payload.get('buyer_name')},\n\n"
+        f"We have received your order (ID: {order_id}) for {product.get('title')} x{payload.get('quantity')}.\n"
+        f"Our team will contact you shortly to confirm details and delivery.\n\n"
+        f"Order summary:\n"
+        f"- Product: {product.get('title')}\n"
+        f"- Quantity: {payload.get('quantity')} {product.get('unit','')}\n"
+        f"- Delivery address: {payload.get('address')}\n\n"
+        f"Please wait for confirmation. Thank you for ordering from Farmyard."
+    )
+
+    farmer_sms = f"New order #{order_id}: {product.get('title')} x{payload.get('quantity')}. Buyer: {payload.get('buyer_name')} {payload.get('buyer_phone')}."
+    buyer_sms = f"Order #{order_id} received. Thank you {payload.get('buyer_name')}. We'll contact you shortly."
+
+    # Determine image path (static images folder)
+    image_path = None
+    img_name = product.get('image') or ''
+    if img_name:
+        static_dir = os.path.join(os.path.dirname(__file__), 'static', STATIC_IMAGE_FOLDER)
+        candidate = os.path.join(static_dir, img_name)
+        if os.path.isfile(candidate):
+            image_path = candidate
+
+    # Send farmer email with inline image if available
+    if FARMER_EMAIL:
+        notify_async(send_email_with_image, FARMER_EMAIL, farmer_subject, farmer_body, image_path)
+    else:
+        logger.warning("FARMER_EMAIL not set; skipping farmer email")
+
+    # Farmer SMS
+    if FARMER_PHONE:
+        notify_async(send_sms, FARMER_PHONE, farmer_sms)
+    else:
+        logger.warning("FARMER_PHONE not set; skipping farmer SMS")
+
+    # Buyer notifications
+    if payload.get('buyer_email'):
+        notify_async(send_email_with_image, payload.get('buyer_email'), buyer_subject, buyer_body, image_path)
+    else:
+        logger.info("Buyer email not provided; skipping buyer email")
+
+    if payload.get('buyer_phone'):
+        notify_async(send_sms, payload.get('buyer_phone'), buyer_sms)
+    else:
+        logger.info("Buyer phone not provided; skipping buyer SMS")
 
 # --- Data access functions (SQLite, using ? placeholders) ---
 def fetch_all_products(category=None, q=None):
@@ -218,10 +384,12 @@ def product_detail(product_id):
 def order(product_id):
     if request.method == 'GET':
         return render_template('order_form.html', product_id=product_id)
+
     if request.is_json:
         data = request.get_json() or {}
     else:
         data = request.form.to_dict()
+
     name = (data.get('buyer_name') or '').strip()
     phone = (data.get('buyer_phone') or '').strip()
     email = (data.get('buyer_email') or '').strip()
@@ -231,16 +399,31 @@ def order(product_id):
         quantity = 1
     address = data.get('address') or ''
     notes = data.get('notes') or ''
+
     if not name or not phone or quantity < 1:
         return jsonify({'error': 'Missing required fields'}), 400
+
     p = fetch_product_by_id(product_id)
     if not p:
         return jsonify({'error': 'Product not found'}), 404
+
     try:
         order_id = insert_order(product_id, name, phone, email, quantity, address, notes)
         if not order_id:
             app.logger.error("Order insert returned no id (DB may be down)")
             return jsonify({'error': 'Server error'}), 500
+
+        # Prepare payload and trigger notifications in background
+        payload = {
+            'buyer_name': name,
+            'buyer_phone': phone,
+            'buyer_email': email,
+            'quantity': quantity,
+            'address': address,
+            'notes': notes
+        }
+        notify_async(send_order_notifications, order_id, p, payload)
+
         return jsonify({'success': True, 'order_id': order_id}), 201
     except Exception:
         app.logger.exception("Order insert failed")
@@ -281,6 +464,1191 @@ if __name__ == '__main__':
     except Exception:
         logger.exception('ensure_tables failed at startup')
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+
+
+
+# import os
+# import logging
+# import sqlite3
+# import threading
+# import smtplib
+# from email.message import EmailMessage
+# from email.utils import make_msgid
+# from pathlib import Path
+# from decimal import Decimal
+# from flask import Flask, g, render_template, request, jsonify, abort, url_for, flash, redirect, current_app
+
+# # --- Configuration via environment variables ---
+# DB_NAME = os.getenv('DB_NAME', os.path.expanduser('~/farmyard.db'))
+# STATIC_IMAGE_FOLDER = os.getenv('STATIC_IMAGE_FOLDER', 'images')
+
+# # --- Notification configuration (via environment variables) ---
+# SMTP_HOST = os.getenv('SMTP_HOST')  # e.g. smtp.gmail.com or localhost for debug server
+# SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+# SMTP_USER = os.getenv('SMTP_USER')  # SMTP username (email)
+# SMTP_PASS = os.getenv('SMTP_PASS')  # SMTP password or app password
+# FROM_EMAIL = os.getenv('FROM_EMAIL', SMTP_USER)
+# FARMER_EMAIL = os.getenv('FARMER_EMAIL')  # farmer's email address
+
+# TWILIO_SID = os.getenv('TWILIO_ACCOUNT_SID')
+# TWILIO_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+# TWILIO_FROM = os.getenv('TWILIO_FROM_NUMBER')  # e.g. +1234567890 (Twilio number)
+# FARMER_PHONE = os.getenv('FARMER_PHONE')  # farmer phone number in E.164 e.g. +2547xxxxxxx
+
+# # Optional: Twilio for SMS
+# try:
+#     from twilio.rest import Client as TwilioClient
+#     _TWILIO_AVAILABLE = True
+# except Exception:
+#     _TWILIO_AVAILABLE = False
+
+# app = Flask(__name__)
+# app.config['JSON_SORT_KEYS'] = False
+
+# # --- Fallback sample products (used if DB is unavailable) ---
+# PRODUCTS = [
+#     {"id": 1, "category": "eggs", "title": "Farm Eggs – Premium Dozen", "price": 150, "unit": "per dozen", "image": "eggtray2.jpeg", "excerpt": "Handpicked premium eggs.", "description": "Premium eggs from free-range hens."},
+#     {"id": 2, "category": "eggs", "title": "Fresh Farm Eggs (Tray)", "price": 350, "unit": "per tray (30 eggs)", "image": "eggs.jpeg", "excerpt": "Fresh, organic eggs.", "description": "Tray of 30 fresh eggs."},
+#     {"id": 3, "category": "poultry", "title": "Kuroiler Hen", "price": 1100, "unit": "per bird", "image": "hen.jpeg", "excerpt": "Robust dual-purpose hen.", "description": "Kuroiler hens are hardy and productive."},
+#     {"id": 4, "category": "poultry", "title": "Rhode Island Red Cock", "price": 1500, "unit": "per bird", "image": "cock.jpeg", "excerpt": "Strong and healthy rooster.", "description": "Ideal for breeding."},
+#     {"id": 5, "category": "pigs", "title": "Landrace Piglet", "price": 8000, "unit": "per piglet", "image": "piglet.jpeg", "excerpt": "Healthy Landrace piglet.", "description": "Weaned, vaccinated piglet."},
+#     {"id": 6, "category": "pigs", "title": "Large White Piglet", "price": 9000, "unit": "per piglet", "image": "piglet1.jpeg", "excerpt": "Large White piglet.", "description": "Ideal for meat production."}
+# ]
+
+# # configure logger
+# logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+
+# # --- SQLite helpers ---
+# def get_db():
+#     if 'db' in g:
+#         return g.db
+#     db_path = DB_NAME
+#     if not os.path.isabs(db_path):
+#         db_path = os.path.expanduser(db_path)
+#     parent = os.path.dirname(db_path) or '.'
+#     os.makedirs(parent, exist_ok=True)
+#     conn = sqlite3.connect(db_path, check_same_thread=False)
+#     conn.row_factory = sqlite3.Row
+#     g.db = conn
+#     return conn
+
+# @app.teardown_appcontext
+# def close_db(exc):
+#     db = g.pop('db', None)
+#     if db is not None:
+#         try:
+#             db.close()
+#         except Exception:
+#             pass
+
+# def rows_to_json_safe(rows):
+#     out = []
+#     for r in rows:
+#         row = dict(r)
+#         price_val = row.get('price')
+#         if isinstance(price_val, Decimal):
+#             row['price'] = float(price_val)
+#         elif isinstance(price_val, (int, float)):
+#             row['price'] = float(price_val)
+#         out.append(row)
+#     return out
+
+# def ensure_tables():
+#     db = get_db()
+#     cur = db.cursor()
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS products (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           category TEXT NOT NULL,
+#           title TEXT NOT NULL,
+#           excerpt TEXT,
+#           description TEXT,
+#           price INTEGER NOT NULL,
+#           unit TEXT,
+#           image TEXT
+#         );
+#     """)
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS orders (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           product_id INTEGER,
+#           buyer_name TEXT NOT NULL,
+#           buyer_phone TEXT NOT NULL,
+#           buyer_email TEXT,
+#           quantity INTEGER NOT NULL DEFAULT 1,
+#           address TEXT,
+#           notes TEXT,
+#           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+#         );
+#     """)
+#     db.commit()
+#     cur.close()
+
+# # --- Notifications (email with inline image + SMS) ---
+# def send_email_with_image(to_address, subject, body_text, image_path=None, image_cid=None):
+#     """Send plain-text + HTML email with optional inline image (image_path is filesystem path)."""
+#     try:
+#         if not SMTP_HOST:
+#             logger.warning("SMTP_HOST not configured; skipping email to %s", to_address)
+#             return False
+
+#         msg = EmailMessage()
+#         msg['From'] = FROM_EMAIL or 'no-reply@example.com'
+#         msg['To'] = to_address
+#         msg['Subject'] = subject
+
+#         # If image provided, send a simple HTML body with inline image; otherwise plain text
+#         if image_path and Path(image_path).is_file():
+#             cid = image_cid or make_msgid(domain='farmyard.local')
+#             html = f"""<html>
+#                 <body>
+#                   <pre style="font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;">{body_text}</pre>
+#                   <p><img src="cid:{cid[1:-1]}" alt="product image" style="max-width:320px; height:auto; border-radius:6px;"/></p>
+#                 </body>
+#                 </html>"""
+#             msg.set_content(body_text)
+#             msg.add_alternative(html, subtype='html')
+#             with open(image_path, 'rb') as imgf:
+#                 img_data = imgf.read()
+#             maintype, subtype = 'image', Path(image_path).suffix.lstrip('.').lower() or 'jpeg'
+#             # attach related image to the HTML part
+#             try:
+#                 msg.get_payload()[1].add_related(img_data, maintype=maintype, subtype=subtype, cid=cid)
+#             except Exception:
+#                 # fallback: attach as normal attachment if related fails
+#                 msg.add_attachment(img_data, maintype=maintype, subtype=subtype, filename=os.path.basename(image_path))
+#         else:
+#             msg.set_content(body_text)
+
+#         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+#             smtp.ehlo()
+#             if SMTP_PORT in (587, 25):
+#                 try:
+#                     smtp.starttls()
+#                     smtp.ehlo()
+#                 except Exception:
+#                     pass
+#             if SMTP_USER and SMTP_PASS:
+#                 smtp.login(SMTP_USER, SMTP_PASS)
+#             smtp.send_message(msg)
+#         logger.info("Email sent to %s", to_address)
+#         return True
+#     except Exception:
+#         logger.exception("Failed to send email to %s", to_address)
+#         return False
+
+# def send_sms(to_number, message):
+#     """Send SMS via Twilio if configured. Returns True on success."""
+#     if not _TWILIO_AVAILABLE or not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_FROM:
+#         logger.warning("Twilio not configured; skipping SMS to %s", to_number)
+#         return False
+#     try:
+#         client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+#         client.messages.create(body=message, from_=TWILIO_FROM, to=to_number)
+#         logger.info("SMS sent to %s", to_number)
+#         return True
+#     except Exception:
+#         logger.exception("Failed to send SMS to %s", to_number)
+#         return False
+
+# def notify_async(fn, *args, **kwargs):
+#     """Run notification function in a daemon thread to avoid blocking requests."""
+#     try:
+#         t = threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
+#         t.start()
+#     except Exception:
+#         logger.exception("Failed to start notification thread")
+
+# def send_order_notifications(order_id, product, payload):
+#     """
+#     Compose and send notifications for a new order.
+#     - order_id: int
+#     - product: dict (id,title,unit,price,image,...)
+#     - payload: dict (buyer_name,buyer_phone,buyer_email,quantity,address,notes)
+#     """
+#     farmer_subject = f"New order #{order_id} — {product.get('title')}"
+#     farmer_body = (
+#         f"New order received\n\n"
+#         f"Order ID: {order_id}\n"
+#         f"Product: {product.get('title')} (ID: {product.get('id')})\n"
+#         f"Quantity: {payload.get('quantity')}\n"
+#         f"Unit: {product.get('unit','')}\n\n"
+#         f"Buyer name: {payload.get('buyer_name')}\n"
+#         f"Buyer phone: {payload.get('buyer_phone')}\n"
+#         f"Buyer email: {payload.get('buyer_email')}\n"
+#         f"Delivery address: {payload.get('address')}\n"
+#         f"Notes: {payload.get('notes')}\n\n"
+#         f"Please contact the buyer to confirm and arrange delivery.\n"
+#     )
+
+#     buyer_subject = f"Order received — #{order_id}"
+#     buyer_body = (
+#         f"Thank you {payload.get('buyer_name')},\n\n"
+#         f"We have received your order (ID: {order_id}) for {product.get('title')} x{payload.get('quantity')}.\n"
+#         f"Our team will contact you shortly to confirm details and delivery.\n\n"
+#         f"Order summary:\n"
+#         f"- Product: {product.get('title')}\n"
+#         f"- Quantity: {payload.get('quantity')} {product.get('unit','')}\n"
+#         f"- Delivery address: {payload.get('address')}\n\n"
+#         f"Please wait for confirmation. Thank you for ordering from Farmyard."
+#     )
+
+#     farmer_sms = f"New order #{order_id}: {product.get('title')} x{payload.get('quantity')}. Buyer: {payload.get('buyer_name')} {payload.get('buyer_phone')}."
+#     buyer_sms = f"Order #{order_id} received. Thank you {payload.get('buyer_name')}. We'll contact you shortly."
+
+#     # Determine image path (static images folder)
+#     image_path = None
+#     img_name = product.get('image') or ''
+#     if img_name:
+#         static_dir = os.path.join(os.path.dirname(__file__), 'static', STATIC_IMAGE_FOLDER)
+#         candidate = os.path.join(static_dir, img_name)
+#         if os.path.isfile(candidate):
+#             image_path = candidate
+
+#     # Send farmer email with inline image if available
+#     if FARMER_EMAIL:
+#         notify_async(send_email_with_image, FARMER_EMAIL, farmer_subject, farmer_body, image_path)
+#     else:
+#         logger.warning("FARMER_EMAIL not set; skipping farmer email")
+
+#     # Farmer SMS
+#     if FARMER_PHONE:
+#         notify_async(send_sms, FARMER_PHONE, farmer_sms)
+#     else:
+#         logger.warning("FARMER_PHONE not set; skipping farmer SMS")
+
+#     # Buyer notifications
+#     if payload.get('buyer_email'):
+#         notify_async(send_email_with_image, payload.get('buyer_email'), buyer_subject, buyer_body, image_path)
+#     else:
+#         logger.info("Buyer email not provided; skipping buyer email")
+
+#     if payload.get('buyer_phone'):
+#         notify_async(send_sms, payload.get('buyer_phone'), buyer_sms)
+#     else:
+#         logger.info("Buyer phone not provided; skipping buyer SMS")
+
+# # --- Data access functions (SQLite, using ? placeholders) ---
+# def fetch_all_products(category=None, q=None):
+#     try:
+#         db = get_db()
+#         sql = "SELECT id, category, title, excerpt, description, price, image, unit FROM products"
+#         params = []
+#         where = []
+#         if category and category.lower() not in ('all', ''):
+#             where.append("category = ?")
+#             params.append(category)
+#         if q:
+#             where.append("(title LIKE ? OR excerpt LIKE ?)")
+#             like = f"%{q}%"
+#             params.extend([like, like])
+#         if where:
+#             sql += " WHERE " + " AND ".join(where)
+#         sql += " ORDER BY id DESC"
+#         cur = db.cursor()
+#         cur.execute(sql, params)
+#         rows = cur.fetchall()
+#         cur.close()
+#         return rows_to_json_safe(rows)
+#     except Exception:
+#         logger.exception("DB error in fetch_all_products")
+#     # fallback to in-memory PRODUCTS
+#     results = PRODUCTS.copy()
+#     if category and category.lower() not in ('all', ''):
+#         results = [p for p in results if p.get('category') == category]
+#     if q:
+#         qlow = q.lower()
+#         results = [p for p in results if qlow in p.get('title', '').lower() or qlow in p.get('excerpt', '').lower()]
+#     return results
+
+# def fetch_product_by_id(product_id):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT id, category, title, excerpt, description, price, image, unit FROM products WHERE id = ?", (product_id,))
+#         row = cur.fetchone()
+#         cur.close()
+#         if row:
+#             row = dict(row)
+#             if isinstance(row.get('price'), Decimal):
+#                 row['price'] = float(row['price'])
+#             elif isinstance(row.get('price'), (int, float)):
+#                 row['price'] = float(row['price'])
+#             return row
+#         return None
+#     except Exception:
+#         logger.exception("DB error in fetch_product_by_id")
+#     return next((x for x in PRODUCTS if x['id'] == product_id), None)
+
+# def insert_order(product_id, name, phone, email, quantity, address, notes):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute(
+#             "INSERT INTO orders (product_id, buyer_name, buyer_phone, buyer_email, quantity, address, notes) VALUES (?,?,?,?,?,?,?)",
+#             (product_id, name, phone, email, quantity, address, notes)
+#         )
+#         order_id = cur.lastrowid
+#         db.commit()
+#         cur.close()
+#         return order_id
+#     except Exception:
+#         logger.exception("DB error in insert_order")
+#         try:
+#             db.rollback()
+#         except Exception:
+#             pass
+#     return None
+
+# @app.context_processor
+# def utility_processor():
+#     def endpoint_exists(name):
+#         return any(rule.endpoint == name for rule in current_app.url_map.iter_rules())
+#     return dict(endpoint_exists=endpoint_exists)
+
+# # --- Routes ---
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
+
+# @app.route('/shop')
+# def shop():
+#     cat = request.args.get('category')
+#     q = request.args.get('q')
+#     products = fetch_all_products(category=cat, q=q)
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category <> '' ORDER BY category")
+#         cats = [r['category'] for r in cur.fetchall()]
+#         cur.close()
+#     except Exception:
+#         logger.warning("DB unavailable when fetching categories; using fallback categories")
+#         cats = sorted({p['category'] for p in PRODUCTS if p.get('category')})
+#     categories = ['all'] + cats
+#     active_category = cat or 'all'
+#     return render_template('shop.html',
+#                            products=products,
+#                            categories=categories,
+#                            active_category=active_category,
+#                            static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/api/product/<int:product_id>')
+# def product_api(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'not found'}), 404
+#     return jsonify(p)
+
+# @app.route('/product/<int:product_id>')
+# def product_detail(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         abort(404)
+#     return render_template('product_detail.html', product=p, static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/order/<int:product_id>', methods=['GET', 'POST'])
+# def order(product_id):
+#     if request.method == 'GET':
+#         return render_template('order_form.html', product_id=product_id)
+
+#     if request.is_json:
+#         data = request.get_json() or {}
+#     else:
+#         data = request.form.to_dict()
+
+#     name = (data.get('buyer_name') or '').strip()
+#     phone = (data.get('buyer_phone') or '').strip()
+#     email = (data.get('buyer_email') or '').strip()
+#     try:
+#         quantity = int(data.get('quantity') or 1)
+#     except Exception:
+#         quantity = 1
+#     address = data.get('address') or ''
+#     notes = data.get('notes') or ''
+
+#     if not name or not phone or quantity < 1:
+#         return jsonify({'error': 'Missing required fields'}), 400
+
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'Product not found'}), 404
+
+#     try:
+#         order_id = insert_order(product_id, name, phone, email, quantity, address, notes)
+#         if not order_id:
+#             app.logger.error("Order insert returned no id (DB may be down)")
+#             return jsonify({'error': 'Server error'}), 500
+
+#         # Prepare payload and trigger notifications in background
+#         payload = {
+#             'buyer_name': name,
+#             'buyer_phone': phone,
+#             'buyer_email': email,
+#             'quantity': quantity,
+#             'address': address,
+#             'notes': notes
+#         }
+#         notify_async(send_order_notifications, order_id, p, payload)
+
+#         return jsonify({'success': True, 'order_id': order_id}), 201
+#     except Exception:
+#         app.logger.exception("Order insert failed")
+#         return jsonify({'error': 'Server error'}), 500
+
+# @app.route('/projects')
+# def projects():
+#     return render_template('projects.html', title="Projects — Farmyard")
+
+# @app.route('/about')
+# def about():
+#     return render_template('about.html', title="About — Farmyard")
+
+# @app.route('/contact', methods=['GET','POST'])
+# def contact():
+#     if request.method == 'POST':
+#         name = request.form.get('name')
+#         email = request.form.get('email')
+#         message = request.form.get('message')
+#         if not name or not email or not message:
+#             flash('Please fill in the required fields.', 'danger')
+#             return redirect(url_for('contact'))
+#         flash('Message sent — thank you!', 'success')
+#         return redirect(url_for('contact'))
+#     return render_template('contact.html', title="Contact — Farmyard")
+
+# @app.route('/privacy')
+# def privacy():
+#     return render_template('privacy.html', title='Privacy Policy')
+
+# @app.route('/terms')
+# def terms():
+#     return render_template('terms.html', title='Terms of Service')
+
+# if __name__ == '__main__':
+#     try:
+#         ensure_tables()
+#     except Exception:
+#         logger.exception('ensure_tables failed at startup')
+#     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+
+
+
+# import os
+# import logging
+# import sqlite3
+# import threading
+# import smtplib
+# from email.message import EmailMessage
+# from decimal import Decimal
+# from flask import Flask, g, render_template, request, jsonify, abort, url_for, flash, redirect, current_app
+
+# # --- Configuration via environment variables ---
+# DB_NAME = os.getenv('DB_NAME', os.path.expanduser('~/farmyard.db'))
+# STATIC_IMAGE_FOLDER = os.getenv('STATIC_IMAGE_FOLDER', 'images')
+
+# # --- Notification configuration (via environment variables) ---
+# SMTP_HOST = os.getenv('SMTP_HOST')  # e.g. smtp.gmail.com or localhost for debug server
+# SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+# SMTP_USER = os.getenv('SMTP_USER')  # SMTP username (email)
+# SMTP_PASS = os.getenv('SMTP_PASS')  # SMTP password or app password
+# FROM_EMAIL = os.getenv('FROM_EMAIL', SMTP_USER)
+# FARMER_EMAIL = os.getenv('FARMER_EMAIL')  # farmer's email address
+
+# TWILIO_SID = os.getenv('TWILIO_ACCOUNT_SID')
+# TWILIO_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+# TWILIO_FROM = os.getenv('TWILIO_FROM_NUMBER')  # e.g. +1234567890 (Twilio number)
+# FARMER_PHONE = os.getenv('FARMER_PHONE')  # farmer phone number in E.164 e.g. +2547xxxxxxx
+
+# # Optional: Twilio for SMS
+# try:
+#     from twilio.rest import Client as TwilioClient
+#     _TWILIO_AVAILABLE = True
+# except Exception:
+#     _TWILIO_AVAILABLE = False
+
+# app = Flask(__name__)
+# app.config['JSON_SORT_KEYS'] = False
+
+# # --- Fallback sample products (used if DB is unavailable) ---
+# PRODUCTS = [
+#     {"id": 1, "category": "eggs", "title": "Farm Eggs – Premium Dozen", "price": 150, "unit": "per dozen", "image": "eggtray2.jpeg", "excerpt": "Handpicked premium eggs.", "description": "Premium eggs from free-range hens."},
+#     {"id": 2, "category": "eggs", "title": "Fresh Farm Eggs (Tray)", "price": 350, "unit": "per tray (30 eggs)", "image": "eggs.jpeg", "excerpt": "Fresh, organic eggs.", "description": "Tray of 30 fresh eggs."},
+#     {"id": 3, "category": "poultry", "title": "Kuroiler Hen", "price": 1100, "unit": "per bird", "image": "hen.jpeg", "excerpt": "Robust dual-purpose hen.", "description": "Kuroiler hens are hardy and productive."},
+#     {"id": 4, "category": "poultry", "title": "Rhode Island Red Cock", "price": 1500, "unit": "per bird", "image": "cock.jpeg", "excerpt": "Strong and healthy rooster.", "description": "Ideal for breeding."},
+#     {"id": 5, "category": "pigs", "title": "Landrace Piglet", "price": 8000, "unit": "per piglet", "image": "piglet.jpeg", "excerpt": "Healthy Landrace piglet.", "description": "Weaned, vaccinated piglet."},
+#     {"id": 6, "category": "pigs", "title": "Large White Piglet", "price": 9000, "unit": "per piglet", "image": "piglet1.jpeg", "excerpt": "Large White piglet.", "description": "Ideal for meat production."}
+# ]
+
+# # configure logger
+# logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+
+# # --- SQLite helpers ---
+# def get_db():
+#     if 'db' in g:
+#         return g.db
+#     db_path = DB_NAME
+#     if not os.path.isabs(db_path):
+#         db_path = os.path.expanduser(db_path)
+#     parent = os.path.dirname(db_path) or '.'
+#     os.makedirs(parent, exist_ok=True)
+#     conn = sqlite3.connect(db_path, check_same_thread=False)
+#     conn.row_factory = sqlite3.Row
+#     g.db = conn
+#     return conn
+
+# @app.teardown_appcontext
+# def close_db(exc):
+#     db = g.pop('db', None)
+#     if db is not None:
+#         try:
+#             db.close()
+#         except Exception:
+#             pass
+
+# def rows_to_json_safe(rows):
+#     out = []
+#     for r in rows:
+#         row = dict(r)
+#         price_val = row.get('price')
+#         if isinstance(price_val, Decimal):
+#             row['price'] = float(price_val)
+#         elif isinstance(price_val, (int, float)):
+#             row['price'] = float(price_val)
+#         out.append(row)
+#     return out
+
+# def ensure_tables():
+#     db = get_db()
+#     cur = db.cursor()
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS products (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           category TEXT NOT NULL,
+#           title TEXT NOT NULL,
+#           excerpt TEXT,
+#           description TEXT,
+#           price INTEGER NOT NULL,
+#           unit TEXT,
+#           image TEXT
+#         );
+#     """)
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS orders (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           product_id INTEGER,
+#           buyer_name TEXT NOT NULL,
+#           buyer_phone TEXT NOT NULL,
+#           buyer_email TEXT,
+#           quantity INTEGER NOT NULL DEFAULT 1,
+#           address TEXT,
+#           notes TEXT,
+#           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+#         );
+#     """)
+#     db.commit()
+#     cur.close()
+
+# # --- Notifications (email + SMS) ---
+# def send_email(to_address, subject, body_text):
+#     """Send a plain-text email synchronously. Returns True on success."""
+#     try:
+#         if not SMTP_HOST:
+#             logger.warning("SMTP_HOST not configured; skipping email to %s", to_address)
+#             return False
+#         msg = EmailMessage()
+#         msg['From'] = FROM_EMAIL or 'no-reply@example.com'
+#         msg['To'] = to_address
+#         msg['Subject'] = subject
+#         msg.set_content(body_text)
+#         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
+#             smtp.ehlo()
+#             if SMTP_PORT in (587, 25):
+#                 smtp.starttls()
+#                 smtp.ehlo()
+#             if SMTP_USER and SMTP_PASS:
+#                 smtp.login(SMTP_USER, SMTP_PASS)
+#             smtp.send_message(msg)
+#         logger.info("Email sent to %s", to_address)
+#         return True
+#     except Exception:
+#         logger.exception("Failed to send email to %s", to_address)
+#         return False
+
+# def send_sms(to_number, message):
+#     """Send SMS via Twilio if configured. Returns True on success."""
+#     if not _TWILIO_AVAILABLE or not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_FROM:
+#         logger.warning("Twilio not configured; skipping SMS to %s", to_number)
+#         return False
+#     try:
+#         client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+#         client.messages.create(body=message, from_=TWILIO_FROM, to=to_number)
+#         logger.info("SMS sent to %s", to_number)
+#         return True
+#     except Exception:
+#         logger.exception("Failed to send SMS to %s", to_number)
+#         return False
+
+# def notify_async(fn, *args, **kwargs):
+#     """Run notification function in a daemon thread to avoid blocking requests."""
+#     try:
+#         t = threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
+#         t.start()
+#     except Exception:
+#         logger.exception("Failed to start notification thread")
+
+# def send_order_notifications(order_id, product, payload):
+#     """
+#     Compose and send notifications for a new order.
+#     - order_id: int
+#     - product: dict (id,title,unit,price,...)
+#     - payload: dict (buyer_name,buyer_phone,buyer_email,quantity,address,notes)
+#     """
+#     farmer_subject = f"New order #{order_id} — {product.get('title')}"
+#     farmer_body = (
+#         f"New order received\n\n"
+#         f"Order ID: {order_id}\n"
+#         f"Product: {product.get('title')} (ID: {product.get('id')})\n"
+#         f"Quantity: {payload.get('quantity')}\n"
+#         f"Unit: {product.get('unit','')}\n\n"
+#         f"Buyer name: {payload.get('buyer_name')}\n"
+#         f"Buyer phone: {payload.get('buyer_phone')}\n"
+#         f"Buyer email: {payload.get('buyer_email')}\n"
+#         f"Delivery address: {payload.get('address')}\n"
+#         f"Notes: {payload.get('notes')}\n\n"
+#         f"Please contact the buyer to confirm and arrange delivery.\n"
+#     )
+
+#     buyer_subject = f"Order received — #{order_id}"
+#     buyer_body = (
+#         f"Thank you {payload.get('buyer_name')},\n\n"
+#         f"We have received your order (ID: {order_id}) for {product.get('title')} x{payload.get('quantity')}.\n"
+#         f"Our team will contact you shortly to confirm details and delivery.\n\n"
+#         f"Order summary:\n"
+#         f"- Product: {product.get('title')}\n"
+#         f"- Quantity: {payload.get('quantity')} {product.get('unit','')}\n"
+#         f"- Delivery address: {payload.get('address')}\n\n"
+#         f"Please wait for confirmation. Thank you for ordering from Farmyard."
+#     )
+
+#     farmer_sms = (
+#         f"New order #{order_id}: {product.get('title')} x{payload.get('quantity')}. "
+#         f"Buyer: {payload.get('buyer_name')} {payload.get('buyer_phone')}. Addr: {payload.get('address')}"
+#     )
+#     buyer_sms = f"Order #{order_id} received. Thank you {payload.get('buyer_name')}. We'll contact you shortly."
+
+#     # Send notifications asynchronously
+#     if FARMER_EMAIL:
+#         notify_async(send_email, FARMER_EMAIL, farmer_subject, farmer_body)
+#     else:
+#         logger.warning("FARMER_EMAIL not set; skipping farmer email")
+
+#     if FARMER_PHONE:
+#         notify_async(send_sms, FARMER_PHONE, farmer_sms)
+#     else:
+#         logger.warning("FARMER_PHONE not set; skipping farmer SMS")
+
+#     if payload.get('buyer_email'):
+#         notify_async(send_email, payload.get('buyer_email'), buyer_subject, buyer_body)
+#     else:
+#         logger.info("Buyer email not provided; skipping buyer email")
+
+#     if payload.get('buyer_phone'):
+#         notify_async(send_sms, payload.get('buyer_phone'), buyer_sms)
+#     else:
+#         logger.info("Buyer phone not provided; skipping buyer SMS")
+
+# # --- Data access functions (SQLite, using ? placeholders) ---
+# def fetch_all_products(category=None, q=None):
+#     try:
+#         db = get_db()
+#         sql = "SELECT id, category, title, excerpt, description, price, image, unit FROM products"
+#         params = []
+#         where = []
+#         if category and category.lower() not in ('all', ''):
+#             where.append("category = ?")
+#             params.append(category)
+#         if q:
+#             where.append("(title LIKE ? OR excerpt LIKE ?)")
+#             like = f"%{q}%"
+#             params.extend([like, like])
+#         if where:
+#             sql += " WHERE " + " AND ".join(where)
+#         sql += " ORDER BY id DESC"
+#         cur = db.cursor()
+#         cur.execute(sql, params)
+#         rows = cur.fetchall()
+#         cur.close()
+#         return rows_to_json_safe(rows)
+#     except Exception:
+#         logger.exception("DB error in fetch_all_products")
+#     # fallback to in-memory PRODUCTS
+#     results = PRODUCTS.copy()
+#     if category and category.lower() not in ('all', ''):
+#         results = [p for p in results if p.get('category') == category]
+#     if q:
+#         qlow = q.lower()
+#         results = [p for p in results if qlow in p.get('title', '').lower() or qlow in p.get('excerpt', '').lower()]
+#     return results
+
+# def fetch_product_by_id(product_id):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT id, category, title, excerpt, description, price, image, unit FROM products WHERE id = ?", (product_id,))
+#         row = cur.fetchone()
+#         cur.close()
+#         if row:
+#             row = dict(row)
+#             if isinstance(row.get('price'), Decimal):
+#                 row['price'] = float(row['price'])
+#             elif isinstance(row.get('price'), (int, float)):
+#                 row['price'] = float(row['price'])
+#             return row
+#         return None
+#     except Exception:
+#         logger.exception("DB error in fetch_product_by_id")
+#     return next((x for x in PRODUCTS if x['id'] == product_id), None)
+
+# def insert_order(product_id, name, phone, email, quantity, address, notes):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute(
+#             "INSERT INTO orders (product_id, buyer_name, buyer_phone, buyer_email, quantity, address, notes) VALUES (?,?,?,?,?,?,?)",
+#             (product_id, name, phone, email, quantity, address, notes)
+#         )
+#         order_id = cur.lastrowid
+#         db.commit()
+#         cur.close()
+#         return order_id
+#     except Exception:
+#         logger.exception("DB error in insert_order")
+#         try:
+#             db.rollback()
+#         except Exception:
+#             pass
+#     return None
+
+# @app.context_processor
+# def utility_processor():
+#     def endpoint_exists(name):
+#         return any(rule.endpoint == name for rule in current_app.url_map.iter_rules())
+#     return dict(endpoint_exists=endpoint_exists)
+
+# # --- Routes ---
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
+
+# @app.route('/shop')
+# def shop():
+#     cat = request.args.get('category')
+#     q = request.args.get('q')
+#     products = fetch_all_products(category=cat, q=q)
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category <> '' ORDER BY category")
+#         cats = [r['category'] for r in cur.fetchall()]
+#         cur.close()
+#     except Exception:
+#         logger.warning("DB unavailable when fetching categories; using fallback categories")
+#         cats = sorted({p['category'] for p in PRODUCTS if p.get('category')})
+#     categories = ['all'] + cats
+#     active_category = cat or 'all'
+#     return render_template('shop.html',
+#                            products=products,
+#                            categories=categories,
+#                            active_category=active_category,
+#                            static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/api/product/<int:product_id>')
+# def product_api(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'not found'}), 404
+#     return jsonify(p)
+
+# @app.route('/product/<int:product_id>')
+# def product_detail(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         abort(404)
+#     return render_template('product_detail.html', product=p, static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/order/<int:product_id>', methods=['GET', 'POST'])
+# def order(product_id):
+#     if request.method == 'GET':
+#         return render_template('order_form.html', product_id=product_id)
+
+#     if request.is_json:
+#         data = request.get_json() or {}
+#     else:
+#         data = request.form.to_dict()
+
+#     name = (data.get('buyer_name') or '').strip()
+#     phone = (data.get('buyer_phone') or '').strip()
+#     email = (data.get('buyer_email') or '').strip()
+#     try:
+#         quantity = int(data.get('quantity') or 1)
+#     except Exception:
+#         quantity = 1
+#     address = data.get('address') or ''
+#     notes = data.get('notes') or ''
+
+#     if not name or not phone or quantity < 1:
+#         return jsonify({'error': 'Missing required fields'}), 400
+
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'Product not found'}), 404
+
+#     try:
+#         order_id = insert_order(product_id, name, phone, email, quantity, address, notes)
+#         if not order_id:
+#             app.logger.error("Order insert returned no id (DB may be down)")
+#             return jsonify({'error': 'Server error'}), 500
+
+#         # Prepare payload and trigger notifications in background
+#         payload = {
+#             'buyer_name': name,
+#             'buyer_phone': phone,
+#             'buyer_email': email,
+#             'quantity': quantity,
+#             'address': address,
+#             'notes': notes
+#         }
+#         notify_async(send_order_notifications, order_id, p, payload)
+
+#         return jsonify({'success': True, 'order_id': order_id}), 201
+#     except Exception:
+#         app.logger.exception("Order insert failed")
+#         return jsonify({'error': 'Server error'}), 500
+
+# @app.route('/projects')
+# def projects():
+#     return render_template('projects.html', title="Projects — Farmyard")
+
+# @app.route('/about')
+# def about():
+#     return render_template('about.html', title="About — Farmyard")
+
+# @app.route('/contact', methods=['GET','POST'])
+# def contact():
+#     if request.method == 'POST':
+#         name = request.form.get('name')
+#         email = request.form.get('email')
+#         message = request.form.get('message')
+#         if not name or not email or not message:
+#             flash('Please fill in the required fields.', 'danger')
+#             return redirect(url_for('contact'))
+#         flash('Message sent — thank you!', 'success')
+#         return redirect(url_for('contact'))
+#     return render_template('contact.html', title="Contact — Farmyard")
+
+# @app.route('/privacy')
+# def privacy():
+#     return render_template('privacy.html', title='Privacy Policy')
+
+# @app.route('/terms')
+# def terms():
+#     return render_template('terms.html', title='Terms of Service')
+
+# if __name__ == '__main__':
+#     try:
+#         ensure_tables()
+#     except Exception:
+#         logger.exception('ensure_tables failed at startup')
+#     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+
+
+
+
+# import os
+# import logging
+# import sqlite3
+# from decimal import Decimal
+# from flask import Flask, g, render_template, request, jsonify, abort, url_for, flash, redirect, current_app
+
+# # --- Configuration via environment variables ---
+# DB_NAME = os.getenv('DB_NAME', os.path.expanduser('~/farmyard.db'))
+# STATIC_IMAGE_FOLDER = os.getenv('STATIC_IMAGE_FOLDER', 'images')
+
+# app = Flask(__name__)
+# app.config['JSON_SORT_KEYS'] = False
+
+# # --- Fallback sample products (used if DB is unavailable) ---
+# PRODUCTS = [
+#     {"id": 1, "category": "eggs", "title": "Farm Eggs – Premium Dozen", "price": 150, "unit": "per dozen", "image": "eggtray2.jpeg", "excerpt": "Handpicked premium eggs.", "description": "Premium eggs from free-range hens."},
+#     {"id": 2, "category": "eggs", "title": "Fresh Farm Eggs (Tray)", "price": 350, "unit": "per tray (30 eggs)", "image": "eggs.jpeg", "excerpt": "Fresh, organic eggs.", "description": "Tray of 30 fresh eggs."},
+#     {"id": 3, "category": "poultry", "title": "Kuroiler Hen", "price": 1100, "unit": "per bird", "image": "hen.jpeg", "excerpt": "Robust dual-purpose hen.", "description": "Kuroiler hens are hardy and productive."},
+#     {"id": 4, "category": "poultry", "title": "Rhode Island Red Cock", "price": 1500, "unit": "per bird", "image": "cock.jpeg", "excerpt": "Strong and healthy rooster.", "description": "Ideal for breeding."},
+#     {"id": 5, "category": "pigs", "title": "Landrace Piglet", "price": 8000, "unit": "per piglet", "image": "piglet.jpeg", "excerpt": "Healthy Landrace piglet.", "description": "Weaned, vaccinated piglet."},
+#     {"id": 6, "category": "pigs", "title": "Large White Piglet", "price": 9000, "unit": "per piglet", "image": "piglet1.jpeg", "excerpt": "Large White piglet.", "description": "Ideal for meat production."}
+# ]
+
+# # configure logger
+# logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.INFO)
+
+# # --- SQLite helpers ---
+# def get_db():
+#     if 'db' in g:
+#         return g.db
+#     db_path = DB_NAME
+#     if not os.path.isabs(db_path):
+#         db_path = os.path.expanduser(db_path)
+#     # ensure parent directory exists
+#     parent = os.path.dirname(db_path) or '.'
+#     os.makedirs(parent, exist_ok=True)
+#     conn = sqlite3.connect(db_path, check_same_thread=False)
+#     conn.row_factory = sqlite3.Row
+#     g.db = conn
+#     return conn
+
+# @app.teardown_appcontext
+# def close_db(exc):
+#     db = g.pop('db', None)
+#     if db is not None:
+#         try:
+#             db.close()
+#         except Exception:
+#             pass
+
+# def rows_to_json_safe(rows):
+#     out = []
+#     for r in rows:
+#         row = dict(r)
+#         price_val = row.get('price')
+#         if isinstance(price_val, Decimal):
+#             row['price'] = float(price_val)
+#         elif isinstance(price_val, (int, float)):
+#             row['price'] = float(price_val)
+#         out.append(row)
+#     return out
+
+# def ensure_tables():
+#     db = get_db()
+#     cur = db.cursor()
+#     # products table: create only if missing (your DB already has it)
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS products (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           category TEXT NOT NULL,
+#           title TEXT NOT NULL,
+#           excerpt TEXT,
+#           description TEXT,
+#           price INTEGER NOT NULL,
+#           unit TEXT,
+#           image TEXT
+#         );
+#     """)
+#     # orders table required by the app
+#     cur.execute("""
+#         CREATE TABLE IF NOT EXISTS orders (
+#           id INTEGER PRIMARY KEY AUTOINCREMENT,
+#           product_id INTEGER,
+#           buyer_name TEXT NOT NULL,
+#           buyer_phone TEXT NOT NULL,
+#           buyer_email TEXT,
+#           quantity INTEGER NOT NULL DEFAULT 1,
+#           address TEXT,
+#           notes TEXT,
+#           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+#         );
+#     """)
+#     db.commit()
+#     cur.close()
+
+# # --- Data access functions (SQLite, using ? placeholders) ---
+# def fetch_all_products(category=None, q=None):
+#     try:
+#         db = get_db()
+#         sql = "SELECT id, category, title, excerpt, description, price, image, unit FROM products"
+#         params = []
+#         where = []
+#         if category and category.lower() not in ('all', ''):
+#             where.append("category = ?")
+#             params.append(category)
+#         if q:
+#             where.append("(title LIKE ? OR excerpt LIKE ?)")
+#             like = f"%{q}%"
+#             params.extend([like, like])
+#         if where:
+#             sql += " WHERE " + " AND ".join(where)
+#         sql += " ORDER BY id DESC"
+#         cur = db.cursor()
+#         cur.execute(sql, params)
+#         rows = cur.fetchall()
+#         cur.close()
+#         return rows_to_json_safe(rows)
+#     except Exception:
+#         logger.exception("DB error in fetch_all_products")
+#     # fallback to in-memory PRODUCTS
+#     results = PRODUCTS.copy()
+#     if category and category.lower() not in ('all', ''):
+#         results = [p for p in results if p.get('category') == category]
+#     if q:
+#         qlow = q.lower()
+#         results = [p for p in results if qlow in p.get('title', '').lower() or qlow in p.get('excerpt', '').lower()]
+#     return results
+
+# def fetch_product_by_id(product_id):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT id, category, title, excerpt, description, price, image, unit FROM products WHERE id = ?", (product_id,))
+#         row = cur.fetchone()
+#         cur.close()
+#         if row:
+#             row = dict(row)
+#             if isinstance(row.get('price'), Decimal):
+#                 row['price'] = float(row['price'])
+#             elif isinstance(row.get('price'), (int, float)):
+#                 row['price'] = float(row['price'])
+#             return row
+#         return None
+#     except Exception:
+#         logger.exception("DB error in fetch_product_by_id")
+#     return next((x for x in PRODUCTS if x['id'] == product_id), None)
+
+# def insert_order(product_id, name, phone, email, quantity, address, notes):
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute(
+#             "INSERT INTO orders (product_id, buyer_name, buyer_phone, buyer_email, quantity, address, notes) VALUES (?,?,?,?,?,?,?)",
+#             (product_id, name, phone, email, quantity, address, notes)
+#         )
+#         order_id = cur.lastrowid
+#         db.commit()
+#         cur.close()
+#         return order_id
+#     except Exception:
+#         logger.exception("DB error in insert_order")
+#         try:
+#             db.rollback()
+#         except Exception:
+#             pass
+#     return None
+
+# @app.context_processor
+# def utility_processor():
+#     def endpoint_exists(name):
+#         return any(rule.endpoint == name for rule in current_app.url_map.iter_rules())
+#     return dict(endpoint_exists=endpoint_exists)
+
+# # --- Routes ---
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
+
+# @app.route('/shop')
+# def shop():
+#     cat = request.args.get('category')
+#     q = request.args.get('q')
+#     products = fetch_all_products(category=cat, q=q)
+#     try:
+#         db = get_db()
+#         cur = db.cursor()
+#         cur.execute("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category <> '' ORDER BY category")
+#         cats = [r['category'] for r in cur.fetchall()]
+#         cur.close()
+#     except Exception:
+#         logger.warning("DB unavailable when fetching categories; using fallback categories")
+#         cats = sorted({p['category'] for p in PRODUCTS if p.get('category')})
+#     categories = ['all'] + cats
+#     active_category = cat or 'all'
+#     return render_template('shop.html',
+#                            products=products,
+#                            categories=categories,
+#                            active_category=active_category,
+#                            static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/api/product/<int:product_id>')
+# def product_api(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'not found'}), 404
+#     return jsonify(p)
+
+# @app.route('/product/<int:product_id>')
+# def product_detail(product_id):
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         abort(404)
+#     return render_template('product_detail.html', product=p, static_image_folder=STATIC_IMAGE_FOLDER)
+
+# @app.route('/order/<int:product_id>', methods=['GET', 'POST'])
+# def order(product_id):
+#     if request.method == 'GET':
+#         return render_template('order_form.html', product_id=product_id)
+#     if request.is_json:
+#         data = request.get_json() or {}
+#     else:
+#         data = request.form.to_dict()
+#     name = (data.get('buyer_name') or '').strip()
+#     phone = (data.get('buyer_phone') or '').strip()
+#     email = (data.get('buyer_email') or '').strip()
+#     try:
+#         quantity = int(data.get('quantity') or 1)
+#     except Exception:
+#         quantity = 1
+#     address = data.get('address') or ''
+#     notes = data.get('notes') or ''
+#     if not name or not phone or quantity < 1:
+#         return jsonify({'error': 'Missing required fields'}), 400
+#     p = fetch_product_by_id(product_id)
+#     if not p:
+#         return jsonify({'error': 'Product not found'}), 404
+#     try:
+#         order_id = insert_order(product_id, name, phone, email, quantity, address, notes)
+#         if not order_id:
+#             app.logger.error("Order insert returned no id (DB may be down)")
+#             return jsonify({'error': 'Server error'}), 500
+#         return jsonify({'success': True, 'order_id': order_id}), 201
+#     except Exception:
+#         app.logger.exception("Order insert failed")
+#         return jsonify({'error': 'Server error'}), 500
+
+# @app.route('/projects')
+# def projects():
+#     return render_template('projects.html', title="Projects — Farmyard")
+
+# @app.route('/about')
+# def about():
+#     return render_template('about.html', title="About — Farmyard")
+
+# @app.route('/contact', methods=['GET','POST'])
+# def contact():
+#     if request.method == 'POST':
+#         name = request.form.get('name')
+#         email = request.form.get('email')
+#         message = request.form.get('message')
+#         if not name or not email or not message:
+#             flash('Please fill in the required fields.', 'danger')
+#             return redirect(url_for('contact'))
+#         flash('Message sent — thank you!', 'success')
+#         return redirect(url_for('contact'))
+#     return render_template('contact.html', title="Contact — Farmyard")
+
+# @app.route('/privacy')
+# def privacy():
+#     return render_template('privacy.html', title='Privacy Policy')
+
+# @app.route('/terms')
+# def terms():
+#     return render_template('terms.html', title='Terms of Service')
+
+# if __name__ == '__main__':
+#     try:
+#         ensure_tables()
+#     except Exception:
+#         logger.exception('ensure_tables failed at startup')
+#     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
 
 
 
