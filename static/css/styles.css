@@ -266,6 +266,110 @@ body::after {
    LAYOUT / FOOTER / MISC
    ========================= */
 /* Footer styles - warm earthy palette */
+
+/* Footer visibility and responsiveness */
+.site-footer {
+  position: relative;
+  z-index: 10; /* ensure footer sits above background elements but below modals */
+  padding: 48px 0;
+  background: linear-gradient(180deg, #0f5132 0%, #0b3b26 100%); /* deeper forest tone */
+  color: #f8f9fa;
+}
+
+/* Ensure page content doesn't hide behind fixed navbar */
+body {
+  padding-top: 72px; /* match navbar height (adjust if your navbar is taller) */
+}
+
+/* Footer columns */
+.site-footer .footer-logo {
+  max-width: 140px;
+  height: auto;
+  display: block;
+}
+.site-footer .brand-title {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Links and small text */
+.site-footer a {
+  color: #e6f7ee;
+  text-decoration: none;
+}
+.site-footer a:hover,
+.site-footer a:focus {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* Footer lists and spacing */
+.site-footer .footer-links li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+/* Social icons */
+.site-footer .social-link svg {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  color: #e6f7ee;
+  transition: transform .12s ease, color .12s ease;
+}
+.site-footer .social-link:hover svg {
+  transform: translateY(-2px);
+  color: #fff;
+}
+
+/* Newsletter form responsiveness */
+.site-footer .newsletter {
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.site-footer .newsletter input[type="email"] {
+  min-width: 0;
+  flex: 1 1 160px;
+}
+.site-footer .newsletter button {
+  white-space: nowrap;
+}
+
+/* Small screens: stack columns */
+@media (max-width: 767.98px) {
+  .site-footer {
+    padding: 32px 16px;
+    text-align: left;
+  }
+  .site-footer .row {
+    gap: 1.25rem;
+  }
+  .site-footer .col-md-4 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+  .site-footer .footer-logo {
+    margin-bottom: 8px;
+  }
+}
+
+/* Optional sticky footer if content is short */
+html, body {
+  height: 100%;
+}
+.page-wrapper {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+main {
+  flex: 1 0 auto;
+}
+.site-footer {
+  flex-shrink: 0;
+}
+
+
 .site-footer { background: linear-gradient(180deg, #0f3b1f 0%, #123f22 60%); color: #f7f6f2; }
 .footer-logo { width:48px; height:48px; object-fit:cover; border-radius:8px; }
 .footer-brand .brand-title { font-family: "Playfair Display", serif; font-size:1.125rem; color:#f3f7ef; margin:0; }
