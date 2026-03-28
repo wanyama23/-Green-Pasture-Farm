@@ -4,8 +4,144 @@
 <div class="py-5">
   <div class="container">
     <h1 class="mb-3">Privacy Policy</h1>
-    <p class="text-muted">We respect your privacy. This page will explain how we collect and use data.</p>
-    <!-- Add your full policy content here -->
+    <p class="text-muted small">Effective date: <strong>{{ effective_date or "2026-03-28" }}</strong></p>
+
+    <h2 class="mt-4">Introduction</h2>
+    <p class="lead">Farmyard (the "Site", "we", "us", "our") is committed to protecting the privacy of visitors and customers in Kenya and beyond. This Privacy Policy explains what personal information we collect, why we collect it, how we use and share it, and the choices you have. It is written in plain language so you can quickly understand your rights and our practices.</p>
+
+    <h2 class="mt-4">Scope</h2>
+    <p>This policy applies to information collected through our website, mobile interfaces, order forms, contact forms, emails, and any other online or offline interactions with Farmyard. It does not apply to information collected by third parties that we do not control.</p>
+
+    <h2 class="mt-4">Information We Collect</h2>
+    <ul>
+      <li><strong>Contact information</strong> — name, email address, phone number, delivery address and billing address you provide when placing an order or contacting us.</li>
+      <li><strong>Order and payment information</strong> — products ordered, quantities, order history, payment method metadata (last four digits, payment provider transaction id), and delivery instructions.</li>
+      <li><strong>Technical and usage information</strong> — IP address, device and browser type, operating system, pages visited, referral source, and timestamps to help us operate and secure the Site.</li>
+      <li><strong>Communications</strong> — messages you send via contact forms, email, or SMS and our replies.</li>
+      <li><strong>Marketing preferences</strong> — whether you have opted in to receive newsletters, promotions, or other marketing communications.</li>
+    </ul>
+
+    <h2 class="mt-4">Cookies and Similar Technologies</h2>
+    <p>We use cookies and similar technologies to provide core site functionality, improve your experience, and measure site performance.</p>
+    <h6 class="mt-3">Types of cookies we use</h6>
+    <ul>
+      <li><strong>Essential cookies</strong> — required for the site to function (e.g., session cookies, shopping cart).</li>
+      <li><strong>Performance cookies</strong> — collect anonymous usage statistics to help us improve the site.</li>
+      <li><strong>Functional cookies</strong> — remember preferences such as language or region.</li>
+      <li><strong>Marketing cookies</strong> — used to deliver relevant ads and measure campaign performance (third‑party providers).</li>
+    </ul>
+    <p><strong>Manage cookies:</strong> Most browsers allow you to block or delete cookies. Blocking essential cookies may prevent the Site from working correctly. For marketing cookies, you can opt out via the links provided in our cookie banner or by adjusting your browser settings.</p>
+
+    <h2 class="mt-4">Payment Processing</h2>
+    <p>We do not store full payment card details on our servers. When you pay online, payments are processed by trusted third‑party payment processors (for example, Stripe, PayPal, or a local Kenyan payment gateway). These providers are responsible for securely collecting and storing your payment information in accordance with applicable standards such as PCI DSS.</p>
+    <p>When you make a payment we may share the following with the payment processor: name, billing address, email, order amount, and transaction metadata. We retain only the minimum payment metadata necessary for order records and refunds (for example, transaction id and last four digits of the card).</p>
+    <p><strong>Local payment options:</strong> if you use a local mobile money or bank transfer option, we will share the required payment reference and contact details with the payment provider to complete the transaction.</p>
+
+    <h2 class="mt-4">How We Use Your Information</h2>
+    <ul>
+      <li>To process and fulfill orders, arrange delivery, and provide customer support.</li>
+      <li>To send transactional messages such as order confirmations, shipping updates, and replies to inquiries.</li>
+      <li>To send marketing communications where you have given consent; you may opt out at any time.</li>
+      <li>To detect and prevent fraud, abuse, and other illegal activity.</li>
+      <li>To comply with legal obligations and respond to lawful requests from public authorities.</li>
+    </ul>
+
+    <h2 class="mt-4">Sharing and Disclosure</h2>
+    <p>We may share personal information with:</p>
+    <ul>
+      <li><strong>Service providers</strong> — companies that provide services on our behalf such as payment processors, delivery partners, email providers, and analytics services. These providers are contractually bound to protect your data.</li>
+      <li><strong>Legal and safety reasons</strong> — when required by law, to respond to legal process, or to protect the rights, property, or safety of Farmyard, our customers, or others.</li>
+      <li><strong>Business transfers</strong> — in the event of a merger, acquisition, or sale of assets, personal data may be transferred as part of that transaction subject to confidentiality protections.</li>
+    </ul>
+    <p><strong>No sale of personal data:</strong> Farmyard does not sell personal information to third parties.</p>
+
+    <h2 class="mt-4">Data Retention</h2>
+    <p>We retain personal data only as long as necessary for the purposes described in this policy, or as required by law. The table below summarizes typical retention periods.</p>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered">
+        <thead class="table-light">
+          <tr>
+            <th>Data category</th>
+            <th>Purpose</th>
+            <th>Retention period</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Order records (name, address, items, transaction id)</td>
+            <td>Fulfillment, refunds, tax and accounting</td>
+            <td>7 years (or as required by Kenyan tax law)</td>
+          </tr>
+          <tr>
+            <td>Contact form messages</td>
+            <td>Responding to inquiries</td>
+            <td>3 years</td>
+          </tr>
+          <tr>
+            <td>Account and profile information</td>
+            <td>Customer service and order history</td>
+            <td>Until account deletion + 1 year</td>
+          </tr>
+          <tr>
+            <td>Payment metadata (transaction id, last 4 digits)</td>
+            <td>Refunds, disputes, accounting</td>
+            <td>7 years</td>
+          </tr>
+          <tr>
+            <td>Analytics and logs (IP, usage)</td>
+            <td>Security, performance, analytics</td>
+            <td>12 months (aggregated/anonymized earlier)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="mt-4">Data Security</h2>
+    <p>We implement reasonable technical and organizational measures to protect personal data against unauthorized access, loss, misuse, or alteration. These measures include encrypted connections (HTTPS), access controls, regular software updates, and secure backups. While we strive to protect your data, no system is completely secure; if a breach occurs we will follow applicable Kenyan law and notify affected individuals where required.</p>
+
+    <h2 class="mt-4">Legal Basis and Compliance (Kenya)</h2>
+    <p>Where applicable, we process personal data on one or more of the following legal bases:</p>
+    <ul>
+      <li>Performance of a contract (processing orders and delivering goods).</li>
+      <li>Consent (for marketing communications and cookies where required).</li>
+      <li>Legal compliance (retaining records for tax and regulatory obligations in Kenya).</li>
+      <li>Legitimate interests (fraud prevention, site security, and improving our services), balanced against your rights.</li>
+    </ul>
+    <p>We aim to comply with Kenyan data protection principles and any applicable local regulations. This policy does not constitute legal advice. If you need legal certainty for a specific situation, consult a qualified attorney in Kenya.</p>
+
+    <h2 class="mt-4">Children</h2>
+    <p>Our services are not directed to children under 13. We do not knowingly collect personal information from children. If you believe we have collected information from a child, please contact us and we will take steps to delete the information where appropriate.</p>
+
+    <h2 class="mt-4">Your Rights and Choices</h2>
+    <p>You have the following rights regarding your personal data, subject to local law:</p>
+    <ul>
+      <li><strong>Access</strong> — request a copy of personal data we hold about you.</li>
+      <li><strong>Correction</strong> — request correction of inaccurate or incomplete data.</li>
+      <li><strong>Deletion</strong> — request deletion of your personal data where we have no legal reason to retain it.</li>
+      <li><strong>Restriction</strong> — request restriction of processing in certain circumstances.</li>
+      <li><strong>Objection</strong> — object to processing based on legitimate interests or direct marketing.</li>
+      <li><strong>Data portability</strong> — request a machine‑readable copy of data you provided to us.</li>
+    </ul>
+    <p>To exercise any of these rights, contact us using the details below. We will respond within a reasonable timeframe and in accordance with applicable law.</p>
+
+    <h2 class="mt-4">How to Contact Us</h2>
+    <p>If you have questions, want to exercise your rights, or wish to make a complaint, contact our data protection contact:</p>
+    <address>
+      <strong>Farmyard</strong><br>
+      Email: <a href="mailto:farmer@farmyard.com">farmer@farmyard.com</a><br>
+      Phone: <a href="tel:+254700000000">+254 700 000 000</a><br>
+      Postal: PO Box 12345, Kisumu, Kenya
+    </address>
+    <p>If you are not satisfied with our response you may lodge a complaint with the Office of the Data Protection Commissioner in Kenya or the relevant authority in your jurisdiction.</p>
+
+    <h2 class="mt-4">Third‑Party Links</h2>
+    <p>Our Site may contain links to third‑party websites. This Privacy Policy does not apply to those sites. We encourage you to read the privacy policies of any third parties before providing personal information.</p>
+
+    <h2 class="mt-4">Changes to this Policy</h2>
+    <p>We may update this Privacy Policy from time to time. When we make material changes we will post a prominent notice on the Site and update the effective date above. Continued use of the Site after changes indicates acceptance of the updated policy.</p>
+
+    <p class="small text-muted mt-3">Last updated: <strong>{{ effective_date or "2026-03-28" }}</strong></p>
   </div>
 </div>
 {% endblock %}

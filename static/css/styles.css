@@ -369,6 +369,121 @@ main {
   flex-shrink: 0;
 }
 
+/* Footer logo and visibility */
+.site-footer {
+  background: linear-gradient(180deg, #0b3b26 0%, #0f5132 100%);
+  color: #f1f5f4;
+  padding: 48px 0;
+  position: relative;
+  z-index: 5;
+}
+
+/* Footer logo: larger and responsive */
+.site-footer .footer-logo {
+  max-width: 100px;    /* larger size for desktop */
+  width: 50%;
+  height: auto;
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* Navbar logo: slightly larger and constrained */
+.navbar .logo-img {
+  max-height: 48px;    /* increase for visibility in navbar */
+  width: auto;
+  display: inline-block;
+}
+
+/* Brand title spacing */
+.navbar .brand-title {
+  font-weight: 700;
+  color: #0f1720;
+}
+
+
+/* Footer: force white text for maximum contrast */
+.site-footer,
+.site-footer * {
+  color: #ffffff !important;
+}
+
+/* Ensure muted helper text is white too */
+.site-footer .text-muted {
+  color: #ffffff !important;
+  opacity: 0.95;
+}
+
+/* Links: white by default, subtle hover */
+.site-footer a,
+.site-footer .link-light {
+  color: #ffffff !important;
+  text-decoration: none;
+}
+.site-footer a:hover,
+.site-footer a:focus {
+  color: #ffffff !important;
+  text-decoration: underline;
+}
+
+/* Footer small/copyright text */
+.site-footer .small,
+.site-footer small {
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
+/* Divider color */
+.site-footer .footer-divider {
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Keep footer logo and spacing rules (preserve previous sizes) */
+.site-footer .footer-logo {
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* Accessibility: stronger focus outlines for keyboard users */
+.site-footer a:focus, .site-footer button:focus, .site-footer input:focus {
+  outline: 3px solid rgba(255,255,255,0.12);
+  outline-offset: 2px;
+}
+
+/* Force footer text and links to pure white for maximum contrast */
+.site-footer { color: #ffffff !important; }
+.site-footer .text-muted { color: rgba(255,255,255,0.95) !important; }
+.site-footer p, .site-footer address, .site-footer .brand-title, .site-footer .muted-small,
+.site-footer .footer-links li, .site-footer .d-flex { color: #ffffff !important; }
+
+.site-footer a { color: #ffffff !important; }
+.site-footer a:hover,
+.site-footer a:focus { color: #fffbf0 !important; text-decoration: underline; }
+
+/* Ensure small helper text remains legible */
+.site-footer small, .site-footer .small { color: rgba(255,255,255,0.9) !important; }
+
+/* Keep social icons visible */
+.site-footer .social-link svg { color: #ffffff; }
+
+
+
+/* Footer text and links contrast */
+.site-footer .text-muted { color: rgba(241,245,244,0.85); }
+.site-footer a { color: #dff7e6; }
+.site-footer a:hover { color: #ffffff; text-decoration: underline; }
+
+/* Make footer columns stack on small screens */
+@media (max-width: 767.98px) {
+  .site-footer .col-md-4 { max-width: 100%; flex: 0 0 100%; }
+  .site-footer .footer-logo { max-width: 160px; margin: 0 0 10px 0; }
+  .navbar .logo-img { max-height: 40px; }
+}
+
+/* Ensure page content doesn't hide behind fixed navbar */
+body { padding-top: 72px; }
 
 .site-footer { background: linear-gradient(180deg, #0f3b1f 0%, #123f22 60%); color: #f7f6f2; }
 .footer-logo { width:48px; height:48px; object-fit:cover; border-radius:8px; }
